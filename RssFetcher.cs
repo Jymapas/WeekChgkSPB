@@ -16,7 +16,7 @@ public class RssFetcher(string url)
             let id = ExtractId(link)
             select new Post
             {
-                Id = id, Title = it.Title.Text, Link = link, Description = it.Summary.Text,
+                Id = id, Title = it.Title.Text, Link = link, Description = it.Summary.Text
             }).ToList();
     }
 
