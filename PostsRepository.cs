@@ -27,14 +27,14 @@ public class PostsRepository
         cmd.ExecuteNonQuery();
     }
 
-    public bool Exists(int id)
+    public bool Exists(long id)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*) FROM posts WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
-        var count = (int)cmd.ExecuteScalar()!;
+        var count = (long)cmd.ExecuteScalar()!;
         return count > 0;
     }
 

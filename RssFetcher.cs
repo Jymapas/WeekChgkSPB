@@ -20,7 +20,7 @@ public class RssFetcher(string url)
             }).ToList();
     }
 
-    private static int ExtractId(string? link)
+    private static long ExtractId(string? link)
     {
         var match = Regex.Match(link ?? "", @"(\d+)\.html");
         return match.Success ? int.Parse(match.Groups[1].Value) : 0;
