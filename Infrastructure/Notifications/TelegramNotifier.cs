@@ -8,7 +8,7 @@ public class TelegramNotifier : INotifier
 {
     private readonly TelegramBotClient _bot;
     private readonly long _chatId;
-    private readonly LinkPreviewOptions _linkPreviewOptions = new LinkPreviewOptions { IsDisabled = true };
+    private readonly LinkPreviewOptions _linkPreviewOptions = new() { IsDisabled = true };
 
     public TelegramNotifier(string token, long chatId)
     {
@@ -20,13 +20,15 @@ public class TelegramNotifier : INotifier
     {
         var text = $"<b>Новый пост</b>\n{Escape(post.Title)}\n{post.Link}";
         await _bot.SendMessage(
-            chatId: _chatId,
-            text: text,
-            parseMode: ParseMode.Html,
+            _chatId,
+            text,
+            ParseMode.Html,
             linkPreviewOptions: _linkPreviewOptions,
             cancellationToken: ct);
     }
 
-    private static string Escape(string s) =>
-        s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    private static string Escape(string s)
+    {
+        return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    }
 }
