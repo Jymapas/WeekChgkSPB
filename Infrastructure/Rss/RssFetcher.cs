@@ -23,6 +23,6 @@ public class RssFetcher(string url)
     private static long ExtractId(string? link)
     {
         var match = Regex.Match(link ?? "", @"(\d+)\.html");
-        return match.Success ? int.Parse(match.Groups[1].Value) : 0;
+        return match.Success ? long.Parse(match.Groups[1].Value) : 0;
     }
 }
