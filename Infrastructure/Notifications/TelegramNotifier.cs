@@ -6,6 +6,7 @@ namespace WeekChgkSPB.Infrastructure.Notifications;
 
 public class TelegramNotifier : INotifier
 {
+    private const int TgLimit = 4096;
     private readonly TelegramBotClient _bot;
     private readonly long _chatId;
     private readonly LinkPreviewOptions _linkPreviewOptions = new() { IsDisabled = true };
@@ -19,6 +20,8 @@ public class TelegramNotifier : INotifier
     public async Task NotifyNewPostAsync(Post post, CancellationToken ct = default)
     {
         var text = $"<b>Новый пост</b>\n{Escape(post.Title)}\n{post.Link}";
+        text = text.Length > TgLimit ? text[..TgLimit] : text;
+
         await _bot.SendMessage(
             _chatId,
             text,
