@@ -23,7 +23,11 @@ internal class Program
         Console.WriteLine("Telegram notifier enabled");
 
         using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            cts.Cancel();
+        };
 
         await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
 
@@ -31,9 +35,7 @@ internal class Program
         try
         {
             while (await timer.WaitForNextTickAsync(cts.Token))
-            {
                 await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
-            }
         }
         catch (OperationCanceledException)
         {
@@ -41,7 +43,8 @@ internal class Program
         }
     }
 
-    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, INotifier notifier, CancellationToken ct)
+    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, INotifier notifier,
+        CancellationToken ct)
     {
         try
         {
