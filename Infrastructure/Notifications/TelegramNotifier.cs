@@ -6,10 +6,9 @@ namespace WeekChgkSPB.Infrastructure.Notifications;
 
 public class TelegramNotifier : INotifier
 {
-    private const int TgLimit = 4096;
     private readonly TelegramBotClient _bot;
     private readonly long _chatId;
-    private readonly LinkPreviewOptions _linkPreviewOptions = new() { IsDisabled = true };
+    private readonly LinkPreviewOptions _noPreview = new() { IsDisabled = true };
 
     public TelegramNotifier(string token, long chatId)
     {
@@ -19,19 +18,40 @@ public class TelegramNotifier : INotifier
 
     public async Task NotifyNewPostAsync(Post post, CancellationToken ct = default)
     {
-        var text = $"<b>Новый пост</b>\n{Escape(post.Title)}\n{post.Link}";
-        text = text.Length > TgLimit ? text[..TgLimit] : text;
+        await SendCodeBlock(post.Id.ToString(), ct);
 
+        await SendCodeBlock(post.Title ?? "", ct);
+
+        var body = post.Description ?? "";
+        foreach (var chunk in SplitBy(body, 4000))
+            await SendCodeBlock(chunk, ct);
+    }
+
+    private async Task SendCodeBlock(string text, CancellationToken ct)
+    {
+        var escaped = Escape(text);
         await _bot.SendMessage(
             _chatId,
-            text,
+            $"<code>{escaped}</code>",
             ParseMode.Html,
-            linkPreviewOptions: _linkPreviewOptions,
+            linkPreviewOptions: _noPreview,
             cancellationToken: ct);
     }
 
     private static string Escape(string s)
     {
         return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+    }
+
+    private static IEnumerable<string> SplitBy(string s, int max)
+    {
+        if (string.IsNullOrEmpty(s))
+        {
+            yield return string.Empty;
+            yield break;
+        }
+
+        for (var i = 0; i < s.Length; i += max)
+            yield return s.Substring(i, Math.Min(max, s.Length - i));
     }
 }
