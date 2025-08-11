@@ -4,6 +4,7 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot;
 
@@ -42,6 +43,43 @@ public class BotRunner
         if (msg is null) return;
         if (msg.Chat.Id != _allowedChatId) return;
         if (msg.Text is null) return;
+
+        if (msg.Text.StartsWith("/makepost", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            DateTime fromUtc; DateTime toUtc;
+
+            if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
+            {
+                fromUtc = f; toUtc = t;
+            }
+            else
+            {
+                var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PostFormatter.Moscow);
+                var startLocal = nowLocal.Date;
+                var endLocal = startLocal.AddDays(14).AddHours(23).AddMinutes(59);
+                fromUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, PostFormatter.Moscow);
+                toUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, PostFormatter.Moscow);
+            }
+
+            var rows = _ann.GetWithLinksInRange(fromUtc, toUtc);
+            if (rows.Count == 0)
+            {
+                await bot.SendMessage(msg.Chat.Id, "В выбранном диапазоне анонсов нет", cancellationToken: ct);
+                return;
+            }
+
+            foreach (var chunk in PostFormatter.BuildScheduleMessages(rows))
+            {
+                await bot.SendMessage(
+                    msg.Chat.Id,
+                    chunk,
+                    ParseMode.Html,
+                    linkPreviewOptions: new Telegram.Bot.Types.LinkPreviewOptions { IsDisabled = true },
+                    cancellationToken: ct);
+            }
+            return;
+        }
 
         if (msg.Text.StartsWith("/add", StringComparison.OrdinalIgnoreCase))
         {
@@ -132,5 +170,17 @@ public class BotRunner
                 _states.TryRemove(msg.From!.Id, out _);
                 break;
         }
+    }
+
+    private static bool TryParseDate(string s, out DateTime utc)
+    {
+        if (DateTime.TryParse(s, null, DateTimeStyles.AssumeLocal, out var dt))
+        {
+            utc = dt.ToUniversalTime();
+            return true;
+        }
+
+        utc = default;
+        return false;
     }
 }
