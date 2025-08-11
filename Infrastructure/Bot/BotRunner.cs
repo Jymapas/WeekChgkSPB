@@ -47,11 +47,13 @@ public class BotRunner
         if (msg.Text.StartsWith("/makepost", StringComparison.OrdinalIgnoreCase))
         {
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            DateTime fromUtc; DateTime toUtc;
+            DateTime fromUtc;
+            DateTime toUtc;
 
             if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
             {
-                fromUtc = f; toUtc = t;
+                fromUtc = f;
+                toUtc = t;
             }
             else
             {
@@ -69,15 +71,14 @@ public class BotRunner
                 return;
             }
 
-            foreach (var chunk in PostFormatter.BuildScheduleMessages(rows))
-            {
-                await bot.SendMessage(
-                    msg.Chat.Id,
-                    chunk,
-                    ParseMode.Html,
-                    linkPreviewOptions: new Telegram.Bot.Types.LinkPreviewOptions { IsDisabled = true },
-                    cancellationToken: ct);
-            }
+            var text = PostFormatter.BuildScheduleMessage(rows);
+
+            await bot.SendMessage(
+                msg.Chat.Id,
+                text,
+                ParseMode.Html,
+                linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
+                cancellationToken: ct);
             return;
         }
 

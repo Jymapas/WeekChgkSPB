@@ -6,27 +6,26 @@ namespace WeekChgkSPB.Infrastructure.Notifications;
 public static class PostFormatter
 {
     private static readonly CultureInfo Ru = new("ru-RU");
-
-    internal static readonly TimeZoneInfo Moscow = TimeZoneInfo.FindSystemTimeZoneById(
+    public static readonly TimeZoneInfo Moscow =
 #if WINDOWS
-        "Russian Standard Time"
+        TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
 #else
-        "Europe/Moscow"
+        TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
 #endif
-    );
 
-    public static IEnumerable<string> BuildScheduleMessages(IEnumerable<AnnouncementRow> rows)
+    public static string BuildScheduleMessage(IEnumerable<AnnouncementRow> rows)
     {
         var byDate = rows
             .Select(r => (r, local: TimeZoneInfo.ConvertTimeFromUtc(r.DateTimeUtc, Moscow)))
             .GroupBy(x => x.local.Date)
             .OrderBy(g => g.Key);
 
-        const int limit = 4096;
+        var sb = new StringBuilder();
+
+        sb.AppendLine("Продолжаем вести список синхронов в Санкт-Петербурге.\n");
+
         foreach (var g in byDate)
         {
-            var sb = new StringBuilder();
-
             var dayName = Abbrev2(Ru.DateTimeFormat.GetDayName(g.Key.DayOfWeek));
             sb.Append("<b>")
                 .Append(g.Key.ToString("dd MMMM", Ru))
@@ -37,24 +36,19 @@ public static class PostFormatter
             foreach (var x in g)
             {
                 var time = x.local.ToString("HH:mm", Ru);
-                var line = $"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {x.r.Cost} р.</a>""";
-
-                if (sb.Length + line.Length + 1 > limit)
-                {
-                    yield return sb.ToString().TrimEnd();
-                    sb.Clear();
-                    sb.Append("<b>")
-                        .Append(g.Key.ToString("dd MMMM", Ru))
-                        .Append(" (")
-                        .Append(dayName)
-                        .Append(")</b>\n");
-                }
-
-                sb.Append(line).Append('\n');
+                sb.Append($"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {x.r.Cost} р.</a>""")
+                    .Append('\n');
             }
 
-            yield return sb.ToString().TrimEnd();
+            sb.Append('\n');
         }
+
+        sb.AppendLine(
+            "13–14 сентября пройдёт фестиваль Nevermore–5. Подробности <a href=\"https://t.me/nevermorequestionspb\">в канале фестиваля</a>.");
+        sb.AppendLine(
+            "Другие турниры, доступные для отыгрыша, можно найти <a href=\"https://chgk.stalnuhhin.ee/\">в планировщике Антона Стальнухина</a>.");
+
+        return sb.ToString().TrimEnd();
     }
 
     private static string Abbrev2(string full)

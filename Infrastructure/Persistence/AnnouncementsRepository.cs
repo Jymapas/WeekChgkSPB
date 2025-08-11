@@ -77,12 +77,12 @@ public class AnnouncementsRepository
             var id = r.GetInt64(0);
             var name = r.GetString(1);
             var place = r.IsDBNull(2) ? "" : r.GetString(2);
-            var dt = DateTime.Parse(r.GetString(3), null, System.Globalization.DateTimeStyles.AdjustToUniversal);
+            var dt = DateTime.Parse(r.GetString(3), null, DateTimeStyles.AdjustToUniversal);
             var cost = r.GetInt32(4);
             var link = r.IsDBNull(5) ? "" : r.GetString(5);
             list.Add(new AnnouncementRow(id, name, place, dt, cost, link));
         }
+
         return list;
     }
-
 }
