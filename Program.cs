@@ -1,4 +1,6 @@
-﻿using WeekChgkSPB;
+﻿using Telegram.Bot;
+using WeekChgkSPB;
+using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Notifications;
 
 internal class Program
@@ -9,6 +11,7 @@ internal class Program
     public static async Task Main()
     {
         var repo = new PostsRepository(DbPath);
+        var annRepo = new AnnouncementsRepository(DbPath);
         var fetcher = new RssFetcher(RssUrl);
 
         var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
@@ -19,7 +22,7 @@ internal class Program
             return;
         }
 
-        INotifier notifier = new TelegramNotifier(token, chatId);
+        var notifier = new TelegramNotifier(token, chatId);
         Console.WriteLine("Telegram notifier enabled");
 
         using var cts = new CancellationTokenSource();
@@ -28,6 +31,10 @@ internal class Program
             e.Cancel = true;
             cts.Cancel();
         };
+
+        var botClient = new TelegramBotClient(token);
+        var runner = new BotRunner(botClient, chatId, repo, annRepo);
+        runner.Start(cts.Token);
 
         await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
 
@@ -39,7 +46,7 @@ internal class Program
         }
         catch (OperationCanceledException)
         {
-            /* graceful shutdown */
+            /* bye */
         }
     }
 
@@ -53,16 +60,16 @@ internal class Program
             {
                 repo.Insert(post);
                 Console.WriteLine($"New post: {post.Id} — {post.Title}");
-
                 try
                 {
                     await notifier.NotifyNewPostAsync(post, ct);
-                    await Task.Delay(250, ct);
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine($"Telegram send failed: {e.Message}");
                 }
+
+                await Task.Delay(250, ct);
             }
         }
         catch (Exception e)
