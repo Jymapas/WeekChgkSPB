@@ -59,13 +59,14 @@ public class AnnouncementsRepository
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
-        var cmd = connection.CreateCommand();
+
+        using var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT a.id; a.tournamentName; a.place; a.dateTimeUtc; a.cost; p.link
-          FROM announcements a
-          JOIN posts p ON p.id = a.id
+            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, p.link
+          FROM announcements AS a
+          JOIN posts AS p ON p.id = a.id
           WHERE a.dateTimeUtc >= @from AND a.dateTimeUtc <= @to
-          ORDER BY a.dateTimeUtc; a.tournamentName;";
+          ORDER BY a.dateTimeUtc, a.tournamentName;";
         cmd.Parameters.AddWithValue("@from", fromUtc.ToString("O"));
         cmd.Parameters.AddWithValue("@to", toUtc.ToString("O"));
 
@@ -76,12 +77,12 @@ public class AnnouncementsRepository
             var id = r.GetInt64(0);
             var name = r.GetString(1);
             var place = r.IsDBNull(2) ? "" : r.GetString(2);
-            var dt = DateTime.Parse(r.GetString(3), null, DateTimeStyles.AdjustToUniversal);
+            var dt = DateTime.Parse(r.GetString(3), null, System.Globalization.DateTimeStyles.AdjustToUniversal);
             var cost = r.GetInt32(4);
             var link = r.IsDBNull(5) ? "" : r.GetString(5);
             list.Add(new AnnouncementRow(id, name, place, dt, cost, link));
         }
-
         return list;
     }
+
 }
