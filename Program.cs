@@ -1,4 +1,6 @@
-﻿using Telegram.Bot;
+﻿using DotNetEnv;
+using System.Runtime.InteropServices;
+using Telegram.Bot;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -9,8 +11,12 @@ internal class Program
 
     public static async Task Main()
     {
-        var dbPath = Environment.GetEnvironmentVariable("DB_PATH") ??
-                     Path.Combine(AppContext.BaseDirectory, "posts.db");
+        Env.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
+
+        var dbPath = ResolveDbPath(
+            Environment.GetEnvironmentVariable("DB_PATH"),
+            AppContext.BaseDirectory);
+        Console.WriteLine($"DB_PATH resolved to: {dbPath}");
 
         var repo = new PostsRepository(dbPath);
         var annRepo = new AnnouncementsRepository(dbPath);
@@ -35,6 +41,9 @@ internal class Program
         };
 
         var botClient = new TelegramBotClient(token);
+
+        Console.WriteLine(botClient.GetMe().Result.Username); // бот не обновился!
+
         var runner = new BotRunner(botClient, chatId, repo, annRepo);
         runner.Start(cts.Token);
 
@@ -78,5 +87,23 @@ internal class Program
         {
             Console.WriteLine($"RSS/DB error: {e.Message}");
         }
+    }
+
+    private static string ResolveDbPath(string? envPath, string baseDir)
+    {
+        if (string.IsNullOrWhiteSpace(envPath))
+            return Path.Combine(baseDir, "posts.db");
+
+        if (!Path.IsPathRooted(envPath))
+            return Path.Combine(baseDir, envPath);
+
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || !envPath.StartsWith('/'))
+        {
+            return envPath;
+        }
+
+        var trimmed = envPath.TrimStart('/', '\\');
+        return Path.Combine(baseDir, trimmed);
+
     }
 }
