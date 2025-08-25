@@ -5,13 +5,15 @@ using WeekChgkSPB.Infrastructure.Notifications;
 
 internal class Program
 {
-    private const string DbPath = "posts.db";
     private const string RssUrl = "https://chgk-spb.livejournal.com/data/rss";
 
     public static async Task Main()
     {
-        var repo = new PostsRepository(DbPath);
-        var annRepo = new AnnouncementsRepository(DbPath);
+        var dbPath = Environment.GetEnvironmentVariable("DB_PATH") ??
+                     Path.Combine(AppContext.BaseDirectory, "posts.db");
+
+        var repo = new PostsRepository(dbPath);
+        var annRepo = new AnnouncementsRepository(dbPath);
         var fetcher = new RssFetcher(RssUrl);
 
         var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
