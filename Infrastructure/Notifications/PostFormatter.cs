@@ -44,6 +44,8 @@ public static class PostFormatter
         }
 
         sb.AppendLine(
+            "Продолжается регистрация на ЧСПб-2025/2026 по КВРМ. Подробности <a href=\"https://t.me/spb_kvrm\">в телеграм-канале</a>.");
+        sb.AppendLine(
             "13–14 сентября пройдёт фестиваль Nevermore–5. Подробности <a href=\"https://t.me/nevermorequestionspb\">в канале фестиваля</a>.");
         sb.AppendLine(
             "Другие турниры, доступные для отыгрыша, можно найти <a href=\"https://chgk.stalnuhhin.ee/\">в планировщике Антона Стальнухина</a>.");
