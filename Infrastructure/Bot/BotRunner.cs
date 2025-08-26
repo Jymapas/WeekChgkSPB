@@ -44,6 +44,44 @@ public class BotRunner
         if (msg.Chat.Id != _allowedChatId) return;
         if (msg.Text is null) return;
 
+        if (msg.Text.StartsWith("/makepostlj", StringComparison.OrdinalIgnoreCase))
+        {
+            // парсинг дат как в /makepost (оставь свой TryParseDate)
+            DateTime fromUtc, toUtc;
+            var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
+            {
+                fromUtc = f; 
+                toUtc = t;
+            }
+            else
+            {
+                var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PostFormatter.Moscow);
+                var startLocal = nowLocal.Date;
+                var endLocal = startLocal.AddDays(14).AddHours(23).AddMinutes(59);
+                fromUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, PostFormatter.Moscow);
+                toUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, PostFormatter.Moscow);
+            }
+
+            var rows = _ann.GetWithLinksInRange(fromUtc, toUtc);
+            if (rows.Count == 0)
+            {
+                await bot.SendMessage(msg.Chat.Id, "В выбранном диапазоне анонсов нет", cancellationToken: ct);
+                return;
+            }
+
+            var ljHtml = PostFormatter.BuildScheduleHtml(rows);                 // «красивый» HTML
+            var codeMsg = PostFormatter.WrapAsCodeForTelegram(ljHtml);          // превращаем в код
+
+            await bot.SendMessage(
+                msg.Chat.Id,
+                codeMsg,
+                ParseMode.Html,                                                 // важно!
+                linkPreviewOptions: new Telegram.Bot.Types.LinkPreviewOptions { IsDisabled = true },
+                cancellationToken: ct);
+            return;
+        }
+
         if (msg.Text.StartsWith("/makepost", StringComparison.OrdinalIgnoreCase))
         {
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -96,7 +134,9 @@ public class BotRunner
         }
 
         if (_states.TryGetValue(msg.From!.Id, out var state) && state.Step != AddStep.None)
+        {
             await HandleAddFlow(bot, msg, state, ct);
+        }
     }
 
     private async Task HandleAddFlow(ITelegramBotClient bot, Message msg, AddAnnouncementState st, CancellationToken ct)
@@ -183,5 +223,10 @@ public class BotRunner
 
         utc = default;
         return false;
+    }
+    
+    private static string EscapeForCode(string s)
+    {
+        return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
     }
 }
