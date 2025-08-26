@@ -50,6 +50,24 @@ public static class PostFormatter
 
         return sb.ToString().TrimEnd();
     }
+    
+    public static string BuildScheduleHtml(IEnumerable<AnnouncementRow> rows)
+    {
+        return BuildScheduleMessage(rows);
+    }
+    
+    public static string WrapAsCodeForTelegram(string html, int tgLimit = 4096)
+    {
+        var escaped = html.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+        var wrapped = "<code>" + escaped + "</code>";
+
+        if (wrapped.Length <= tgLimit) return wrapped;
+
+        var budget = tgLimit - "</code>".Length - 1;
+        if (budget < 0) budget = 0;
+        return "<code>" + escaped[..Math.Min(budget, escaped.Length)] + "…</code>";
+    }
 
     private static string Abbrev2(string full)
     {
