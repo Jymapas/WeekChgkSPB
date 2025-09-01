@@ -1,1 +1,8 @@
 # WeekChgkSPB
+
+## .env example
+```yml
+TELEGRAM_BOT_TOKEN=123456789:AAaa1122BBbb
+TELEGRAM_CHAT_ID=-4815162342
+DB_PATH=/data/posts.db
+```

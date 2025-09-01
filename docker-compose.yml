@@ -1,0 +1,7 @@
+services:
+  weekchgk-spb:
+    image: weekchgk-spb:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /opt/WeekChgkSPB/data:/data
