@@ -13,7 +13,7 @@ public static class PostFormatter
         TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
 #endif
 
-    public static string BuildScheduleMessage(IEnumerable<AnnouncementRow> rows)
+    public static string BuildScheduleMessage(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines = null)
     {
         var byDate = rows
             .Select(r => (r, local: TimeZoneInfo.ConvertTimeFromUtc(r.DateTimeUtc, Moscow)))
@@ -39,25 +39,26 @@ public static class PostFormatter
                 sb.Append($"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {x.r.Cost} р.</a>""")
                     .Append('\n');
             }
-
-            sb.Append('\n');
         }
 
-        sb.AppendLine(
-            "Продолжается регистрация на ЧСПб-2025/2026 по КВРМ. Подробности <a href=\"https://t.me/spb_kvrm\">в телеграм-канале</a>.");
-        sb.AppendLine(
-            "13–14 сентября пройдёт фестиваль Nevermore–5. Подробности <a href=\"https://t.me/nevermorequestionspb\">в канале фестиваля</a>.");
-        sb.AppendLine(
-            "Другие турниры, доступные для отыгрыша, можно найти <a href=\"https://chgk.stalnuhhin.ee/\">в планировщике Антона Стальнухина</a>.");
+        if (footerLines is not null)
+        {
+            sb.AppendLine();
+
+            foreach (var line in footerLines)
+            {
+                sb.AppendLine(line.TrimEnd());
+            }
+        }
 
         return sb.ToString().TrimEnd();
     }
-    
-    public static string BuildScheduleHtml(IEnumerable<AnnouncementRow> rows)
+
+    public static string BuildScheduleHtml(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines = null)
     {
-        return BuildScheduleMessage(rows);
+        return BuildScheduleMessage(rows, footerLines);
     }
-    
+
     public static string WrapAsCodeForTelegram(string html, int tgLimit = 4096)
     {
         var escaped = html.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");

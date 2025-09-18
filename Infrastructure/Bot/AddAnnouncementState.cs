@@ -8,7 +8,8 @@ internal enum AddStep
     WaitingPlace,
     WaitingDateTime,
     WaitingCost,
-    Done
+    Done,
+    FooterWaitingText
 }
 
 internal class AddAnnouncementState

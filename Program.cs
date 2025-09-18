@@ -19,6 +19,7 @@ internal class Program
         Console.WriteLine($"DB_PATH resolved to: {dbPath}");
 
         var repo = new PostsRepository(dbPath);
+        var footersRepository = new FootersRepository(dbPath);
         var annRepo = new AnnouncementsRepository(dbPath);
         var fetcher = new RssFetcher(RssUrl);
 
@@ -44,7 +45,7 @@ internal class Program
 
         Console.WriteLine(botClient.GetMe().Result.Username); // бот не обновился!
 
-        var runner = new BotRunner(botClient, chatId, repo, annRepo);
+        var runner = new BotRunner(botClient, chatId, repo, annRepo, footersRepository);
         runner.Start(cts.Token);
 
         await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
