@@ -1,6 +1,7 @@
 ﻿using DotNetEnv;
 using System.Runtime.InteropServices;
 using Telegram.Bot;
+using Telegram.Bot.Types;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -43,8 +44,13 @@ internal class Program
 
         var botClient = new TelegramBotClient(token);
 
-        Console.WriteLine(botClient.GetMe().Result.Username); // бот не обновился!
+        Console.WriteLine(botClient.GetMe().Result.Username);
 
+        var commands = BotCommands.AsBotCommands();
+        await botClient.SetMyCommands(
+            commands: commands,
+            scope: BotCommandScope.AllGroupChats(),
+            cancellationToken: cts.Token);
         var runner = new BotRunner(botClient, chatId, repo, annRepo, footersRepository);
         runner.Start(cts.Token);
 

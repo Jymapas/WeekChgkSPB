@@ -46,13 +46,13 @@ public class BotRunner
         if (msg.Chat.Id != _allowedChatId) return;
         if (msg.Text is null) return;
 
-        if (msg.Text.StartsWith("/makepostlj", StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.MakePostLJ, StringComparison.OrdinalIgnoreCase))
         {
             DateTime fromUtc, toUtc;
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
             {
-                fromUtc = f; 
+                fromUtc = f;
                 toUtc = t;
             }
             else
@@ -84,7 +84,7 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith("/makepost", StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.MakePost, StringComparison.OrdinalIgnoreCase))
         {
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             DateTime fromUtc;
@@ -124,7 +124,7 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith("/add", StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Step = AddStep.WaitingId;
@@ -137,7 +137,7 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith("/footer_add", StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.FooterAdd, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Step = AddStep.FooterWaitingText;
@@ -145,7 +145,7 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith("/footer_list", StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.FooterList, StringComparison.OrdinalIgnoreCase))
         {
             var all = _footers.ListAllDesc();
             if (all.Count == 0)
@@ -165,7 +165,7 @@ public class BotRunner
             await HandleAddFlow(bot, msg, state, ct);
         }
 
-        if (msg.Text.StartsWith("/footer_del", StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.FooterDel, StringComparison.OrdinalIgnoreCase))
         {
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length < 2 || !long.TryParse(parts[1], out var id))
@@ -274,7 +274,7 @@ public class BotRunner
         utc = default;
         return false;
     }
-    
+
     private static string EscapeForCode(string s)
     {
         return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
