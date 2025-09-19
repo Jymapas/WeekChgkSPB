@@ -7,6 +7,7 @@ public static class BotCommands
     public const string MakePostLJ = "/makepostlj";
     public const string MakePost = "/makepost";
     public const string Add = "/add";
+    public const string Edit = "/edit";
     public const string FooterAdd = "/footer_add";
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
@@ -16,6 +17,7 @@ public static class BotCommands
         MakePostLJ,
         MakePost,
         Add,
+        Edit,
         FooterAdd,
         FooterList,
         FooterDel,
@@ -26,6 +28,7 @@ public static class BotCommands
         [MakePostLJ] = "Создать пост для LiveJournal",
         [MakePost]   = "Создать пост",
         [Add]        = "Добавить анонс",
+        [Edit]       = "Редактировать анонс",
         [FooterAdd]  = "Добавить футер",
         [FooterList] = "Список футеров",
         [FooterDel]  = "Удалить футер",

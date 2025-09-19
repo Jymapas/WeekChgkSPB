@@ -55,6 +55,53 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
     }
 
+    public Announcement? Get(long id)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            @"SELECT id, tournamentName, place, dateTimeUtc, cost
+              FROM announcements
+              WHERE id=@id";
+        cmd.Parameters.AddWithValue("@id", id);
+
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+
+        var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
+        var dt = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal);
+
+        return new Announcement
+        {
+            Id = reader.GetInt64(0),
+            TournamentName = reader.GetString(1),
+            Place = place,
+            DateTimeUtc = dt,
+            Cost = reader.GetInt32(4)
+        };
+    }
+
+    public void Update(Announcement a)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            @"UPDATE announcements
+              SET tournamentName=@name,
+                  place=@place,
+                  dateTimeUtc=@dt,
+                  cost=@cost
+              WHERE id=@id";
+        cmd.Parameters.AddWithValue("@id", a.Id);
+        cmd.Parameters.AddWithValue("@name", a.TournamentName);
+        cmd.Parameters.AddWithValue("@place", a.Place);
+        cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
+        cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.ExecuteNonQuery();
+    }
+
     public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime toUtc)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
