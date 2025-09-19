@@ -1,6 +1,7 @@
 ﻿using DotNetEnv;
 using System.Runtime.InteropServices;
 using Telegram.Bot;
+using Telegram.Bot.Types;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -19,6 +20,7 @@ internal class Program
         Console.WriteLine($"DB_PATH resolved to: {dbPath}");
 
         var repo = new PostsRepository(dbPath);
+        var footersRepository = new FootersRepository(dbPath);
         var annRepo = new AnnouncementsRepository(dbPath);
         var fetcher = new RssFetcher(RssUrl);
 
@@ -42,9 +44,14 @@ internal class Program
 
         var botClient = new TelegramBotClient(token);
 
-        Console.WriteLine(botClient.GetMe().Result.Username); // бот не обновился!
+        Console.WriteLine(botClient.GetMe().Result.Username);
 
-        var runner = new BotRunner(botClient, chatId, repo, annRepo);
+        var commands = BotCommands.AsBotCommands();
+        await botClient.SetMyCommands(
+            commands: commands,
+            scope: BotCommandScope.AllGroupChats(),
+            cancellationToken: cts.Token);
+        var runner = new BotRunner(botClient, chatId, repo, annRepo, footersRepository);
         runner.Start(cts.Token);
 
         await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
