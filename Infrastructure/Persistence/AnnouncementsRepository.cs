@@ -113,7 +113,7 @@ public class AnnouncementsRepository
           FROM announcements AS a
           JOIN posts AS p ON p.id = a.id
           WHERE a.dateTimeUtc >= @from AND a.dateTimeUtc <= @to
-          ORDER BY a.dateTimeUtc, a.tournamentName;";
+          ORDER BY a.dateTimeUtc, a.id;";
         cmd.Parameters.AddWithValue("@from", fromUtc.ToString("O"));
         cmd.Parameters.AddWithValue("@to", toUtc.ToString("O"));
 
