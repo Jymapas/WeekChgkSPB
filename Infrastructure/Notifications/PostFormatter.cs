@@ -39,12 +39,11 @@ public static class PostFormatter
                 sb.Append($"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {x.r.Cost} р.</a>""")
                     .Append('\n');
             }
+            sb.AppendLine();
         }
 
         if (footerLines is not null)
         {
-            sb.AppendLine();
-
             foreach (var line in footerLines)
             {
                 sb.AppendLine(line.TrimEnd());
