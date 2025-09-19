@@ -8,6 +8,10 @@ public static class BotCommands
     public const string MakePost = "/makepost";
     public const string Add = "/add";
     public const string Edit = "/edit";
+    public const string EditName = "/edit_name";
+    public const string EditPlace = "/edit_place";
+    public const string EditDateTime = "/edit_datetime";
+    public const string EditCost = "/edit_cost";
     public const string FooterAdd = "/footer_add";
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
@@ -18,6 +22,10 @@ public static class BotCommands
         MakePost,
         Add,
         Edit,
+        EditName,
+        EditPlace,
+        EditDateTime,
+        EditCost,
         FooterAdd,
         FooterList,
         FooterDel,
@@ -29,6 +37,10 @@ public static class BotCommands
         [MakePost]   = "Создать пост",
         [Add]        = "Добавить анонс",
         [Edit]       = "Редактировать анонс",
+        [EditName]   = "Изменить название анонса",
+        [EditPlace]  = "Изменить место проведения",
+        [EditDateTime] = "Изменить дату и время",
+        [EditCost]   = "Изменить стоимость",
         [FooterAdd]  = "Добавить футер",
         [FooterList] = "Список футеров",
         [FooterDel]  = "Удалить футер",

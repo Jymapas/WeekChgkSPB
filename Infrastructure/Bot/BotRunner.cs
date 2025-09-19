@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Globalization;
+using System.Linq;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -127,7 +128,6 @@ public class BotRunner
         if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
-            st.IsEdit = false;
             st.Existing = null;
             st.Step = AddStep.WaitingId;
             st.Draft.Id = 0;
@@ -139,42 +139,104 @@ public class BotRunner
             await bot.SendMessage(msg.Chat.Id, "Отправь id поста", cancellationToken: ct);
             return;
         }
+        if (msg.Text.StartsWith(BotCommands.EditName, StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleEditCommand(
+                bot,
+                msg,
+                AddStep.EditWaitingName,
+                "/edit_name <id> [новое название]",
+                existing =>
+                    $"Редактирование анонса {existing.Id}.\nТекущее название: {existing.TournamentName}\nОтправь новое название",
+                (existing, newValue) =>
+                {
+                    if (string.IsNullOrWhiteSpace(newValue))
+                    {
+                        return (false, "Название не может быть пустым");
+                    }
+
+                    existing.TournamentName = newValue;
+                    return (true, "Название обновлено");
+                },
+                ct);
+            return;
+        }
+
+        if (msg.Text.StartsWith(BotCommands.EditPlace, StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleEditCommand(
+                bot,
+                msg,
+                AddStep.EditWaitingPlace,
+                "/edit_place <id> [новое место]",
+                existing =>
+                    $"Редактирование анонса {existing.Id}.\nТекущее место: {existing.Place}\nОтправь новое место",
+                (existing, newValue) =>
+                {
+                    existing.Place = newValue ?? string.Empty;
+                    return (true, "Место обновлено");
+                },
+                ct);
+            return;
+        }
+
+        if (msg.Text.StartsWith(BotCommands.EditDateTime, StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleEditCommand(
+                bot,
+                msg,
+                AddStep.EditWaitingDateTime,
+                "/edit_datetime <id> [новая дата и время]",
+                existing =>
+                    $"Редактирование анонса {existing.Id}.\nТекущая дата и время: {existing.DateTimeUtc:O}\nОтправь новую дату и время в формате ISO 8601 UTC",
+                (existing, newValue) =>
+                {
+                    if (!DateTime.TryParse(newValue, null,
+                            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                    {
+                        return (false, "Неверный формат. Пример: 2025-08-10T19:30:00Z");
+                    }
+
+                    existing.DateTimeUtc = parsed.ToUniversalTime();
+                    return (true, "Дата и время обновлены");
+                },
+                ct);
+            return;
+        }
+
+        if (msg.Text.StartsWith(BotCommands.EditCost, StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleEditCommand(
+                bot,
+                msg,
+                AddStep.EditWaitingCost,
+                "/edit_cost <id> [новая стоимость]",
+                existing =>
+                    $"Редактирование анонса {existing.Id}.\nТекущая стоимость: {existing.Cost}\nОтправь новую стоимость (целое число)",
+                (existing, newValue) =>
+                {
+                    if (!int.TryParse(newValue, out var cost))
+                    {
+                        return (false, "Нужно целое число");
+                    }
+
+                    existing.Cost = cost;
+                    return (true, "Стоимость обновлена");
+                },
+                ct);
+            return;
+        }
+
         if (msg.Text.StartsWith(BotCommands.Edit, StringComparison.OrdinalIgnoreCase))
         {
-            var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length < 2 || !long.TryParse(parts[1], out var id))
-            {
-                await bot.SendMessage(msg.Chat.Id, "Используй: /edit <id>", cancellationToken: ct);
-                return;
-            }
-
-            var existing = _ann.Get(id);
-            if (existing is null)
-            {
-                await bot.SendMessage(msg.Chat.Id, "Анонс с таким id не найден", cancellationToken: ct);
-                return;
-            }
-
-            var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
-            st.IsEdit = true;
-            st.Existing = existing;
-            st.Step = AddStep.WaitingName;
-            st.Draft.Id = existing.Id;
-            st.Draft.TournamentName = existing.TournamentName;
-            st.Draft.Place = existing.Place;
-            st.Draft.DateTimeUtc = existing.DateTimeUtc;
-            st.Draft.Cost = existing.Cost;
-
-            var prompt =
-                $"Редактирование анонса {existing.Id}.\nТекущее название: {existing.TournamentName}\nОтправь новое название";
-            await bot.SendMessage(msg.Chat.Id, prompt, cancellationToken: ct);
+            const string usage = "Используй команды: /edit_name, /edit_place, /edit_datetime, /edit_cost";
+            await bot.SendMessage(msg.Chat.Id, usage, cancellationToken: ct);
             return;
         }
 
         if (msg.Text.StartsWith(BotCommands.FooterAdd, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
-            st.IsEdit = false;
             st.Existing = null;
             st.Step = AddStep.FooterWaitingText;
             await bot.SendMessage(msg.Chat.Id, "Отправь одну строку HTML для футера", cancellationToken: ct);
@@ -198,7 +260,7 @@ public class BotRunner
 
         if (_states.TryGetValue(msg.From!.Id, out var state) && state.Step != AddStep.None)
         {
-            await HandleAddFlow(bot, msg, state, ct);
+            await HandleStateFlow(bot, msg, state, ct);
         }
 
         if (msg.Text.StartsWith(BotCommands.FooterDel, StringComparison.OrdinalIgnoreCase))
@@ -215,7 +277,7 @@ public class BotRunner
         }
     }
 
-    private async Task HandleAddFlow(ITelegramBotClient bot, Message msg, AddAnnouncementState st, CancellationToken ct)
+    private async Task HandleStateFlow(ITelegramBotClient bot, Message msg, AddAnnouncementState st, CancellationToken ct)
     {
         switch (st.Step)
         {
@@ -245,22 +307,22 @@ public class BotRunner
                 break;
 
             case AddStep.WaitingName:
-                st.Draft.TournamentName = msg.Text!;
+                if (string.IsNullOrWhiteSpace(msg.Text))
+                {
+                    await bot.SendMessage(msg.Chat.Id, "Название не может быть пустым", cancellationToken: ct);
+                    return;
+                }
+
+                st.Draft.TournamentName = msg.Text!.Trim();
                 st.Step = AddStep.WaitingPlace;
-                var placePrompt = st.IsEdit && st.Existing is { } existingPlace &&
-                                  !string.IsNullOrWhiteSpace(existingPlace.Place)
-                    ? $"Место проведения (сейчас: {existingPlace.Place})"
-                    : "Место проведения";
-                await bot.SendMessage(msg.Chat.Id, placePrompt, cancellationToken: ct);
+                await bot.SendMessage(msg.Chat.Id, "Место проведения", cancellationToken: ct);
                 break;
 
             case AddStep.WaitingPlace:
-                st.Draft.Place = msg.Text!;
+                st.Draft.Place = msg.Text?.Trim() ?? string.Empty;
                 st.Step = AddStep.WaitingDateTime;
-                var dtPrompt = st.IsEdit && st.Existing is { } existingDt
-                    ? $"Дата и время (ISO 8601 UTC; пример: 2025-08-10T19:30:00Z; сейчас: {existingDt.DateTimeUtc.ToUniversalTime():O})"
-                    : "Дата и время (ISO 8601 UTC; пример: 2025-08-10T19:30:00Z)";
-                await bot.SendMessage(msg.Chat.Id, dtPrompt, cancellationToken: ct);
+                await bot.SendMessage(msg.Chat.Id,
+                    "Дата и время (ISO 8601 UTC; пример: 2025-08-10T19:30:00Z)", cancellationToken: ct);
                 break;
 
             case AddStep.WaitingDateTime:
@@ -274,10 +336,7 @@ public class BotRunner
 
                 st.Draft.DateTimeUtc = dt.ToUniversalTime();
                 st.Step = AddStep.WaitingCost;
-                var costPrompt = st.IsEdit && st.Existing is { } existingCost
-                    ? $"Стоимость (целое число; сейчас: {existingCost.Cost})"
-                    : "Стоимость (целое число)";
-                await bot.SendMessage(msg.Chat.Id, costPrompt, cancellationToken: ct);
+                await bot.SendMessage(msg.Chat.Id, "Стоимость (целое число)", cancellationToken: ct);
                 break;
 
             case AddStep.WaitingCost:
@@ -288,35 +347,176 @@ public class BotRunner
                 }
 
                 st.Draft.Cost = cost;
+                _ann.Insert(st.Draft);
 
-                if (st.IsEdit)
-                {
-                    _ann.Update(st.Draft);
-                    st.Step = AddStep.Done;
-                    await bot.SendMessage(msg.Chat.Id, "Обновлено", cancellationToken: ct);
-                }
-                else
-                {
-                    _ann.Insert(st.Draft);
-                    st.Step = AddStep.Done;
-
-                    await bot.SendMessage(msg.Chat.Id, "Сохранено", cancellationToken: ct);
-                }
+                st.Step = AddStep.Done;
+                await bot.SendMessage(msg.Chat.Id, "Сохранено", cancellationToken: ct);
                 _states.TryRemove(msg.From!.Id, out _);
                 st.Existing = null;
-                st.IsEdit = false;
+                break;
+
+            case AddStep.EditWaitingName:
+                await ApplyEditFromState(
+                    bot,
+                    msg,
+                    st,
+                    existing =>
+                    {
+                        if (string.IsNullOrWhiteSpace(msg.Text))
+                        {
+                            return (false, "Название не может быть пустым");
+                        }
+
+                        existing.TournamentName = msg.Text!.Trim();
+                        return (true, "Название обновлено");
+                    },
+                    ct);
+                break;
+
+            case AddStep.EditWaitingPlace:
+                await ApplyEditFromState(
+                    bot,
+                    msg,
+                    st,
+                    existing =>
+                    {
+                        existing.Place = msg.Text?.Trim() ?? string.Empty;
+                        return (true, "Место обновлено");
+                    },
+                    ct);
+                break;
+
+            case AddStep.EditWaitingDateTime:
+                await ApplyEditFromState(
+                    bot,
+                    msg,
+                    st,
+                    existing =>
+                    {
+                        if (!DateTime.TryParse(msg.Text, null,
+                                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                                out var parsed))
+                        {
+                            return (false, "Неверный формат. Пример: 2025-08-10T19:30:00Z");
+                        }
+
+                        existing.DateTimeUtc = parsed.ToUniversalTime();
+                        return (true, "Дата и время обновлены");
+                    },
+                    ct);
+                break;
+
+            case AddStep.EditWaitingCost:
+                await ApplyEditFromState(
+                    bot,
+                    msg,
+                    st,
+                    existing =>
+                    {
+                        if (!int.TryParse(msg.Text, out var parsedCost))
+                        {
+                            return (false, "Нужно целое число");
+                        }
+
+                        existing.Cost = parsedCost;
+                        return (true, "Стоимость обновлена");
+                    },
+                    ct);
                 break;
 
             case AddStep.FooterWaitingText:
-                {
-                    var html = msg.Text!.Trim();
-                    var footerId = _footers.Insert(html);
-                    await bot.SendMessage(msg.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: ct);
-                    st.Step = AddStep.Done;
-                    _states.TryRemove(msg.From!.Id, out _);
-                    break;
-                }
+            {
+                var html = msg.Text!.Trim();
+                var footerId = _footers.Insert(html);
+                await bot.SendMessage(msg.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: ct);
+                st.Step = AddStep.Done;
+                _states.TryRemove(msg.From!.Id, out _);
+                break;
+            }
         }
+    }
+
+    private async Task HandleEditCommand(
+        ITelegramBotClient bot,
+        Message msg,
+        AddStep waitingStep,
+        string usage,
+        Func<Announcement, string> promptFactory,
+        Func<Announcement, string?, (bool Success, string Message)> apply,
+        CancellationToken ct)
+    {
+        var parts = msg.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2 || !long.TryParse(parts[1], out var id))
+        {
+            await bot.SendMessage(msg.Chat.Id, $"Используй: {usage}", cancellationToken: ct);
+            return;
+        }
+
+        var existing = _ann.Get(id);
+        if (existing is null)
+        {
+            await bot.SendMessage(msg.Chat.Id, "Анонс с таким id не найден", cancellationToken: ct);
+            return;
+        }
+
+        var hasInlineValue = parts.Length > 2;
+        var inlineValue = hasInlineValue ? string.Join(' ', parts.Skip(2)) : null;
+
+        if (hasInlineValue)
+        {
+            var (success, message) = apply(existing, inlineValue);
+            if (!success)
+            {
+                await bot.SendMessage(msg.Chat.Id, message, cancellationToken: ct);
+
+                var stError = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
+                stError.Step = waitingStep;
+                stError.Existing = existing;
+                await bot.SendMessage(msg.Chat.Id, promptFactory(existing), cancellationToken: ct);
+                return;
+            }
+
+            _ann.Update(existing);
+            await bot.SendMessage(msg.Chat.Id, message, cancellationToken: ct);
+            _states.TryRemove(msg.From!.Id, out _);
+            return;
+        }
+
+        var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
+        st.Step = waitingStep;
+        st.Existing = existing;
+
+        await bot.SendMessage(msg.Chat.Id, promptFactory(existing), cancellationToken: ct);
+    }
+
+    private async Task ApplyEditFromState(
+        ITelegramBotClient bot,
+        Message msg,
+        AddAnnouncementState st,
+        Func<Announcement, (bool Success, string Message)> mutator,
+        CancellationToken ct)
+    {
+        if (st.Existing is null)
+        {
+            st.Step = AddStep.None;
+            await bot.SendMessage(msg.Chat.Id, "Нет активного анонса для редактирования", cancellationToken: ct);
+            _states.TryRemove(msg.From!.Id, out _);
+            return;
+        }
+
+        var (success, response) = mutator(st.Existing);
+        if (!success)
+        {
+            await bot.SendMessage(msg.Chat.Id, response, cancellationToken: ct);
+            return;
+        }
+
+        _ann.Update(st.Existing);
+        await bot.SendMessage(msg.Chat.Id, response, cancellationToken: ct);
+
+        st.Step = AddStep.Done;
+        _states.TryRemove(msg.From!.Id, out _);
+        st.Existing = null;
     }
 
     private static bool TryParseDate(string s, out DateTime utc)
