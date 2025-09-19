@@ -19,6 +19,10 @@ public class BotRunner
 
     private readonly ConcurrentDictionary<long, AddAnnouncementState> _states = new();
 
+    private const string AddLinesPrompt =
+        "Отправь 5 строк: id поста, название турнира, место (можно оставить пустым), дата и время " +
+        "(ISO 8601 UTC, пример: 2025-08-10T19:30:00Z), стоимость (целое число).";
+
     public BotRunner(ITelegramBotClient bot, long allowedChatId, PostsRepository posts, AnnouncementsRepository ann, FootersRepository footers)
     {
         _bot = bot;
@@ -125,18 +129,52 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith(BotCommands.AddLines, StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase) &&
+            (msg.Text.Length == BotCommands.Add.Length ||
+             char.IsWhiteSpace(msg.Text[BotCommands.Add.Length])))
         {
+            var inline = msg.Text.Length == BotCommands.Add.Length
+                ? string.Empty
+                : msg.Text[BotCommands.Add.Length..].TrimStart();
+
+            if (!string.IsNullOrEmpty(inline))
+            {
+                if (await TryProcessAddLines(bot, msg, inline, ct)) return;
+
+                var retryState = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
+                retryState.Existing = null;
+                retryState.Step = AddStep.WaitingLines;
+                ResetDraft(retryState);
+                await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
+                return;
+            }
+
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Existing = null;
             st.Step = AddStep.WaitingId;
-            st.Draft.Id = 0;
-            st.Draft.TournamentName = "";
-            st.Draft.Place = "";
-            st.Draft.DateTimeUtc = DateTime.MinValue;
-            st.Draft.Cost = 0;
+            ResetDraft(st);
 
             await bot.SendMessage(msg.Chat.Id, "Отправь id поста", cancellationToken: ct);
+            return;
+        }
+        if (msg.Text.StartsWith(BotCommands.AddLines, StringComparison.OrdinalIgnoreCase))
+        {
+            var inline = msg.Text.Length > BotCommands.AddLines.Length
+                ? msg.Text[BotCommands.AddLines.Length..].TrimStart()
+                : string.Empty;
+
+            if (!string.IsNullOrEmpty(inline))
+            {
+                var handled = await TryProcessAddLines(bot, msg, inline, ct);
+                if (handled) return;
+            }
+
+            var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
+            st.Existing = null;
+            st.Step = AddStep.WaitingLines;
+            ResetDraft(st);
+
+            await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
             return;
         }
         if (msg.Text.StartsWith(BotCommands.EditName, StringComparison.OrdinalIgnoreCase))
@@ -355,6 +393,20 @@ public class BotRunner
                 st.Existing = null;
                 break;
 
+            case AddStep.WaitingLines:
+                if (await TryProcessAddLines(bot, msg, msg.Text ?? string.Empty, ct))
+                {
+                    st.Step = AddStep.Done;
+                    _states.TryRemove(msg.From!.Id, out _);
+                    st.Existing = null;
+                    ResetDraft(st);
+                }
+                else
+                {
+                    await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
+                }
+                break;
+
             case AddStep.EditWaitingName:
                 await ApplyEditFromState(
                     bot,
@@ -517,6 +569,107 @@ public class BotRunner
         st.Step = AddStep.Done;
         _states.TryRemove(msg.From!.Id, out _);
         st.Existing = null;
+    }
+
+    private async Task<bool> TryProcessAddLines(ITelegramBotClient bot, Message msg, string content, CancellationToken ct)
+    {
+        if (!TryBuildAnnouncementFromLines(content, out var announcement, out var error))
+        {
+            await bot.SendMessage(msg.Chat.Id, error, cancellationToken: ct);
+            return false;
+        }
+
+        if (!_posts.Exists(announcement.Id))
+        {
+            await bot.SendMessage(msg.Chat.Id, "Такого поста нет в базе", cancellationToken: ct);
+            return false;
+        }
+
+        if (_ann.Exists(announcement.Id))
+        {
+            await bot.SendMessage(msg.Chat.Id, "Анонс для этого id уже есть", cancellationToken: ct);
+            return false;
+        }
+
+        _ann.Insert(announcement);
+        await bot.SendMessage(msg.Chat.Id, "Сохранено", cancellationToken: ct);
+        _states.TryRemove(msg.From!.Id, out _);
+        return true;
+    }
+
+    private static bool TryBuildAnnouncementFromLines(string content, out Announcement announcement, out string error)
+    {
+        announcement = default!;
+
+        var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
+        var rawLines = normalized.Split('\n');
+        var lines = rawLines.Select(static line => line.Trim()).ToList();
+
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        if (lines.Count < 5)
+        {
+            error = "Нужно передать 5 строк: id, название, место, дата и время, стоимость.";
+            return false;
+        }
+
+        if (lines.Count > 5)
+        {
+            error = "Ожидаю ровно 5 строк без дополнительного текста.";
+            return false;
+        }
+
+        if (!long.TryParse(lines[0], out var id))
+        {
+            error = "Первая строка — числовой id.";
+            return false;
+        }
+
+        var name = lines[1];
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Вторая строка должна содержать название турнира.";
+            return false;
+        }
+
+        var place = lines[2];
+
+        if (!DateTime.TryParse(lines[3], null,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+        {
+            error = "Четвёртая строка — дата и время в формате ISO 8601 UTC (пример: 2025-08-10T19:30:00Z).";
+            return false;
+        }
+
+        if (!int.TryParse(lines[4], out var cost))
+        {
+            error = "Пятая строка — стоимость (целое число).";
+            return false;
+        }
+
+        announcement = new Announcement
+        {
+            Id = id,
+            TournamentName = name,
+            Place = place,
+            DateTimeUtc = dt.ToUniversalTime(),
+            Cost = cost
+        };
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static void ResetDraft(AddAnnouncementState st)
+    {
+        st.Draft.Id = 0;
+        st.Draft.TournamentName = string.Empty;
+        st.Draft.Place = string.Empty;
+        st.Draft.DateTimeUtc = DateTime.MinValue;
+        st.Draft.Cost = 0;
     }
 
     private static bool TryParseDate(string s, out DateTime utc)

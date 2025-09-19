@@ -8,6 +8,7 @@ internal enum AddStep
     WaitingPlace,
     WaitingDateTime,
     WaitingCost,
+    WaitingLines,
     EditWaitingName,
     EditWaitingPlace,
     EditWaitingDateTime,

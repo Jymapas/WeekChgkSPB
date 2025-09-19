@@ -6,6 +6,7 @@ public static class BotCommands
 {
     public const string MakePostLJ = "/makepostlj";
     public const string MakePost = "/makepost";
+    public const string Add = "/add";
     public const string AddLines = "/add_lines";
     public const string Edit = "/edit";
     public const string EditName = "/edit_name";
@@ -20,6 +21,7 @@ public static class BotCommands
     [
         MakePostLJ,
         MakePost,
+        Add,
         AddLines,
         Edit,
         EditName,
@@ -35,7 +37,7 @@ public static class BotCommands
     {
         [MakePostLJ] = "Создать пост для LiveJournal",
         [MakePost] = "Создать пост",
-        [AddLines] = "Добавить анонс",
+        [Add] = "Добавить анонс по шагам",
         [AddLines] = "Добавить анонс единым блоком",
         [Edit] = "Редактировать анонс",
         [EditName] = "Изменить название анонса",
