@@ -6,7 +6,7 @@ public static class BotCommands
 {
     public const string MakePostLJ = "/makepostlj";
     public const string MakePost = "/makepost";
-    public const string Add = "/add";
+    public const string AddLines = "/add_lines";
     public const string Edit = "/edit";
     public const string EditName = "/edit_name";
     public const string EditPlace = "/edit_place";
@@ -20,7 +20,7 @@ public static class BotCommands
     [
         MakePostLJ,
         MakePost,
-        Add,
+        AddLines,
         Edit,
         EditName,
         EditPlace,
@@ -31,19 +31,20 @@ public static class BotCommands
         FooterDel,
     ];
 
-    private readonly static Dictionary<string,string> CustomDescriptions = new(StringComparer.OrdinalIgnoreCase)
+    private readonly static Dictionary<string, string> CustomDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
         [MakePostLJ] = "Создать пост для LiveJournal",
-        [MakePost]   = "Создать пост",
-        [Add]        = "Добавить анонс",
-        [Edit]       = "Редактировать анонс",
-        [EditName]   = "Изменить название анонса",
-        [EditPlace]  = "Изменить место проведения",
+        [MakePost] = "Создать пост",
+        [AddLines] = "Добавить анонс",
+        [AddLines] = "Добавить анонс единым блоком",
+        [Edit] = "Редактировать анонс",
+        [EditName] = "Изменить название анонса",
+        [EditPlace] = "Изменить место проведения",
         [EditDateTime] = "Изменить дату и время",
-        [EditCost]   = "Изменить стоимость",
-        [FooterAdd]  = "Добавить футер",
+        [EditCost] = "Изменить стоимость",
+        [FooterAdd] = "Добавить футер",
         [FooterList] = "Список футеров",
-        [FooterDel]  = "Удалить футер",
+        [FooterDel] = "Удалить футер",
     };
 
     public static BotCommand?[] AsBotCommands() =>

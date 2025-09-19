@@ -125,7 +125,7 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.AddLines, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Existing = null;
@@ -425,14 +425,14 @@ public class BotRunner
                 break;
 
             case AddStep.FooterWaitingText:
-            {
-                var html = msg.Text!.Trim();
-                var footerId = _footers.Insert(html);
-                await bot.SendMessage(msg.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: ct);
-                st.Step = AddStep.Done;
-                _states.TryRemove(msg.From!.Id, out _);
-                break;
-            }
+                {
+                    var html = msg.Text!.Trim();
+                    var footerId = _footers.Insert(html);
+                    await bot.SendMessage(msg.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: ct);
+                    st.Step = AddStep.Done;
+                    _states.TryRemove(msg.From!.Id, out _);
+                    break;
+                }
         }
     }
 
