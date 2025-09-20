@@ -129,26 +129,8 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase) &&
-            (msg.Text.Length == BotCommands.Add.Length ||
-             char.IsWhiteSpace(msg.Text[BotCommands.Add.Length])))
+        if (msg.Text.StartsWith(BotCommands.AddLines, StringComparison.OrdinalIgnoreCase))
         {
-            var inline = msg.Text.Length == BotCommands.Add.Length
-                ? string.Empty
-                : msg.Text[BotCommands.Add.Length..].TrimStart();
-
-            if (!string.IsNullOrEmpty(inline))
-            {
-                if (await TryProcessAddLines(bot, msg, inline, ct)) return;
-
-                var retryState = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
-                retryState.Existing = null;
-                retryState.Step = AddStep.WaitingLines;
-                ResetDraft(retryState);
-                await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
-                return;
-            }
-
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Existing = null;
             st.Step = AddStep.WaitingId;
@@ -157,18 +139,9 @@ public class BotRunner
             await bot.SendMessage(msg.Chat.Id, "Отправь id поста", cancellationToken: ct);
             return;
         }
-        if (msg.Text.StartsWith(BotCommands.AddLines, StringComparison.OrdinalIgnoreCase))
+
+        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase))
         {
-            var inline = msg.Text.Length > BotCommands.AddLines.Length
-                ? msg.Text[BotCommands.AddLines.Length..].TrimStart()
-                : string.Empty;
-
-            if (!string.IsNullOrEmpty(inline))
-            {
-                var handled = await TryProcessAddLines(bot, msg, inline, ct);
-                if (handled) return;
-            }
-
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Existing = null;
             st.Step = AddStep.WaitingLines;
@@ -177,6 +150,7 @@ public class BotRunner
             await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
             return;
         }
+
         if (msg.Text.StartsWith(BotCommands.EditName, StringComparison.OrdinalIgnoreCase))
         {
             await HandleEditCommand(
