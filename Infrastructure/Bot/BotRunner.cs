@@ -20,8 +20,8 @@ public class BotRunner
     private readonly ConcurrentDictionary<long, AddAnnouncementState> _states = new();
 
     private const string AddLinesPrompt =
-        "Отправь 5 строк: id поста, название турнира, место (можно оставить пустым), дата и время " +
-        "(ISO 8601 UTC, пример: 2025-08-10T19:30:00Z), стоимость (целое число).";
+        "Отправь 5 строк: id поста, название турнира, место (можно оставить пустым), дата и время по Москве " +
+        "(пример: 2025-08-10T19:30), стоимость (целое число).";
 
     public BotRunner(ITelegramBotClient bot, long allowedChatId, PostsRepository posts, AnnouncementsRepository ann, FootersRepository footers)
     {
@@ -200,16 +200,18 @@ public class BotRunner
                 AddStep.EditWaitingDateTime,
                 "/edit_datetime <id> [новая дата и время]",
                 existing =>
-                    $"Редактирование анонса {existing.Id}.\nТекущая дата и время: {existing.DateTimeUtc:O}\nОтправь новую дату и время в формате ISO 8601 UTC",
+                {
+                    var local = TimeZoneInfo.ConvertTimeFromUtc(existing.DateTimeUtc, PostFormatter.Moscow);
+                    return $"Редактирование анонса {existing.Id}.\nТекущая дата и время (Москва): {local:yyyy-MM-dd HH:mm}\nОтправь новую дату и время по Москве";
+                },
                 (existing, newValue) =>
                 {
-                    if (!DateTime.TryParse(newValue, null,
-                            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                    if (!TryParseMoscowDateTime(newValue, out var parsedUtc))
                     {
-                        return (false, "Неверный формат. Пример: 2025-08-10T19:30:00Z");
+                        return (false, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)");
                     }
 
-                    existing.DateTimeUtc = parsed.ToUniversalTime();
+                    existing.DateTimeUtc = parsedUtc;
                     return (true, "Дата и время обновлены");
                 },
                 ct);
@@ -334,19 +336,18 @@ public class BotRunner
                 st.Draft.Place = msg.Text?.Trim() ?? string.Empty;
                 st.Step = AddStep.WaitingDateTime;
                 await bot.SendMessage(msg.Chat.Id,
-                    "Дата и время (ISO 8601 UTC; пример: 2025-08-10T19:30:00Z)", cancellationToken: ct);
+                    "Дата и время по Москве (пример: 2025-08-10T19:30)", cancellationToken: ct);
                 break;
 
             case AddStep.WaitingDateTime:
-                if (!DateTime.TryParse(msg.Text, null,
-                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+                if (!TryParseMoscowDateTime(msg.Text, out var utcValue))
                 {
-                    await bot.SendMessage(msg.Chat.Id, "Неверный формат. Пример: 2025-08-10T19:30:00Z",
+                    await bot.SendMessage(msg.Chat.Id, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)",
                         cancellationToken: ct);
                     return;
                 }
 
-                st.Draft.DateTimeUtc = dt.ToUniversalTime();
+                st.Draft.DateTimeUtc = utcValue;
                 st.Step = AddStep.WaitingCost;
                 await bot.SendMessage(msg.Chat.Id, "Стоимость (целое число)", cancellationToken: ct);
                 break;
@@ -419,14 +420,12 @@ public class BotRunner
                     st,
                     existing =>
                     {
-                        if (!DateTime.TryParse(msg.Text, null,
-                                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
-                                out var parsed))
+                        if (!TryParseMoscowDateTime(msg.Text, out var parsedUtc))
                         {
-                            return (false, "Неверный формат. Пример: 2025-08-10T19:30:00Z");
+                            return (false, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)");
                         }
 
-                        existing.DateTimeUtc = parsed.ToUniversalTime();
+                        existing.DateTimeUtc = parsedUtc;
                         return (true, "Дата и время обновлены");
                     },
                     ct);
@@ -611,10 +610,9 @@ public class BotRunner
 
         var place = lines[2];
 
-        if (!DateTime.TryParse(lines[3], null,
-                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+        if (!TryParseMoscowDateTime(lines[3], out var dt))
         {
-            error = "Четвёртая строка — дата и время в формате ISO 8601 UTC (пример: 2025-08-10T19:30:00Z).";
+            error = "Четвёртая строка — дата и время по Москве (пример: 2025-08-10T19:30).";
             return false;
         }
 
@@ -629,7 +627,7 @@ public class BotRunner
             Id = id,
             TournamentName = name,
             Place = place,
-            DateTimeUtc = dt.ToUniversalTime(),
+            DateTimeUtc = dt,
             Cost = cost
         };
 
@@ -646,16 +644,47 @@ public class BotRunner
         st.Draft.Cost = 0;
     }
 
-    private static bool TryParseDate(string s, out DateTime utc)
+    private static readonly string[] MoscowDateTimeFormats =
     {
-        if (DateTime.TryParse(s, null, DateTimeStyles.AssumeLocal, out var dt))
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd"
+    };
+
+    private static bool TryParseMoscowDateTime(string? input, out DateTime utc)
+    {
+        if (string.IsNullOrWhiteSpace(input))
         {
-            utc = dt.ToUniversalTime();
+            utc = default;
+            return false;
+        }
+
+        var trimmed = input.Trim();
+
+        if (DateTimeOffset.TryParse(trimmed, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var dto))
+        {
+            utc = dto.UtcDateTime;
             return true;
         }
 
-        utc = default;
-        return false;
+        if (!DateTime.TryParseExact(trimmed, MoscowDateTimeFormats,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+        {
+            utc = default;
+            return false;
+        }
+
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+        return true;
+    }
+
+    private static bool TryParseDate(string s, out DateTime utc)
+    {
+        return TryParseMoscowDateTime(s, out utc);
     }
 
     private static string EscapeForCode(string s)
