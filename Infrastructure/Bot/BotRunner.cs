@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -20,8 +21,9 @@ public class BotRunner
     private readonly ConcurrentDictionary<long, AddAnnouncementState> _states = new();
 
     private const string AddLinesPrompt =
-        "Отправь 5 строк: id поста, название турнира, место, дата и время по Петербургу " +
-        "(пример: 2025-08-10T19:30), стоимость (целое число).";
+        "Отправь 5 или 6 строк: id поста, название турнира, место, дата и время по Петербургу " +
+        "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
+        "стоимость (целое число).";
 
     public BotRunner(ITelegramBotClient bot, long allowedChatId, PostsRepository posts, AnnouncementsRepository ann, FootersRepository footers)
     {
@@ -336,13 +338,16 @@ public class BotRunner
                 st.Draft.Place = msg.Text?.Trim() ?? string.Empty;
                 st.Step = AddStep.WaitingDateTime;
                 await bot.SendMessage(msg.Chat.Id,
-                    "Дата и время по Москве (пример: 2025-08-10T19:30)", cancellationToken: ct);
+                    "Дата и время по Москве. Можно отправить ISO (пример: 2025-08-10T19:30) " +
+                    "или двумя строками: дата (например, 22 сентября) и новой строкой время (например, 19:30)",
+                    cancellationToken: ct);
                 break;
 
             case AddStep.WaitingDateTime:
                 if (!TryParseMoscowDateTime(msg.Text, out var utcValue))
                 {
-                    await bot.SendMessage(msg.Chat.Id, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)",
+                    await bot.SendMessage(msg.Chat.Id,
+                        "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30",
                         cancellationToken: ct);
                     return;
                 }
@@ -422,7 +427,8 @@ public class BotRunner
                     {
                         if (!TryParseMoscowDateTime(msg.Text, out var parsedUtc))
                         {
-                            return (false, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)");
+                            return (false,
+                                "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30");
                         }
 
                         existing.DateTimeUtc = parsedUtc;
@@ -585,13 +591,13 @@ public class BotRunner
 
         if (lines.Count < 5)
         {
-            error = "Нужно передать 5 строк: id, название, место, дата и время, стоимость.";
+            error = "Нужно передать 5 или 6 строк: id, название, место, дата и время (одна строка ISO или две строки), стоимость.";
             return false;
         }
 
-        if (lines.Count > 5)
+        if (lines.Count > 6)
         {
-            error = "Ожидаю ровно 5 строк без дополнительного текста.";
+            error = "Ожидаю 5 или 6 строк без дополнительного текста.";
             return false;
         }
 
@@ -610,15 +616,29 @@ public class BotRunner
 
         var place = lines[2];
 
-        if (!TryParseMoscowDateTime(lines[3], out var dt))
+        string dateTimeInput;
+        string costLine;
+
+        if (lines.Count == 6)
         {
-            error = "Четвёртая строка — дата и время по Москве (пример: 2025-08-10T19:30).";
+            dateTimeInput = lines[3] + "\n" + lines[4];
+            costLine = lines[5];
+        }
+        else
+        {
+            dateTimeInput = lines[3];
+            costLine = lines[4];
+        }
+
+        if (!TryParseMoscowDateTime(dateTimeInput, out var dt))
+        {
+            error = "Дата и время не распознаны. Пример: 2025-08-10T19:30 или 22 сентября\\n19:30.";
             return false;
         }
 
-        if (!int.TryParse(lines[4], out var cost))
+        if (!int.TryParse(costLine, out var cost))
         {
-            error = "Пятая строка — стоимость (целое число).";
+            error = "Строка со стоимостью должна содержать целое число.";
             return false;
         }
 
@@ -653,6 +673,9 @@ public class BotRunner
         "yyyy-MM-dd"
     };
 
+    private static readonly CultureInfo RuCulture = new("ru-RU");
+    private static readonly Regex YearRegex = new("\\d{4}");
+
     private static bool TryParseMoscowDateTime(string? input, out DateTime utc)
     {
         if (string.IsNullOrWhiteSpace(input))
@@ -661,17 +684,75 @@ public class BotRunner
             return false;
         }
 
-        var trimmed = input.Trim();
+        var normalized = input.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+        var parts = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        if (DateTimeOffset.TryParse(trimmed, CultureInfo.InvariantCulture,
+        if (parts.Length == 2 && TryParseHumanDateTime(parts[0], parts[1], out utc))
+        {
+            return true;
+        }
+
+        if (parts.Length == 1)
+        {
+            var single = parts[0];
+
+            if (TryParseSingleLineHumanDateTime(single, out utc))
+            {
+                return true;
+            }
+
+            if (DateTimeOffset.TryParse(single, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal, out var dtoSingle))
+            {
+                utc = dtoSingle.UtcDateTime;
+                return true;
+            }
+
+            if (DateTime.TryParseExact(single, MoscowDateTimeFormats,
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var localSingle))
+            {
+                var unspecifiedLocal = DateTime.SpecifyKind(localSingle, DateTimeKind.Unspecified);
+                utc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedLocal, PostFormatter.Moscow);
+                return true;
+            }
+
+            if (DateTime.TryParse(single, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var ruLocal))
+            {
+                var unspecifiedLocal = DateTime.SpecifyKind(ruLocal, DateTimeKind.Unspecified);
+                utc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedLocal, PostFormatter.Moscow);
+                return true;
+            }
+        }
+
+        if (DateTimeOffset.TryParse(normalized, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal, out var dto))
         {
             utc = dto.UtcDateTime;
             return true;
         }
 
-        if (!DateTime.TryParseExact(trimmed, MoscowDateTimeFormats,
+        if (DateTime.TryParseExact(normalized, MoscowDateTimeFormats,
                 CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+        {
+            var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+            utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+            return true;
+        }
+
+        if (DateTime.TryParse(normalized, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var ruLocalFallback))
+        {
+            var unspecified = DateTime.SpecifyKind(ruLocalFallback, DateTimeKind.Unspecified);
+            utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+            return true;
+        }
+
+        utc = default;
+        return false;
+    }
+
+    private static bool TryParseHumanDateTime(string datePart, string timePart, out DateTime utc)
+    {
+        if (!TryBuildLocalFromHuman(datePart, timePart, out var local))
         {
             utc = default;
             return false;
@@ -680,6 +761,63 @@ public class BotRunner
         var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
         utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
         return true;
+    }
+
+    private static bool TryParseSingleLineHumanDateTime(string single, out DateTime utc)
+    {
+        utc = default;
+
+        var pieces = single.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (pieces.Length < 2)
+        {
+            return false;
+        }
+
+        var datePart = string.Join(' ', pieces[..^1]);
+        var timePart = pieces[^1];
+
+        if (!TryBuildLocalFromHuman(datePart, timePart, out var local))
+        {
+            return false;
+        }
+
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+        return true;
+    }
+
+    private static bool TryBuildLocalFromHuman(string datePart, string timePart, out DateTime local)
+    {
+        local = default;
+
+        if (!TimeSpan.TryParse(timePart, CultureInfo.InvariantCulture, out var timeOfDay))
+        {
+            return false;
+        }
+
+        if (!DateTime.TryParse(datePart, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var dateOnly))
+        {
+            return false;
+        }
+
+        local = new DateTime(dateOnly.Year, dateOnly.Month, dateOnly.Day,
+            timeOfDay.Hours, timeOfDay.Minutes, timeOfDay.Seconds);
+
+        if (!ContainsYear(datePart))
+        {
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PostFormatter.Moscow);
+            if (local < nowLocal)
+            {
+                local = local.AddYears(1);
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ContainsYear(string datePart)
+    {
+        return YearRegex.IsMatch(datePart);
     }
 
     private static bool TryParseDate(string s, out DateTime utc)
