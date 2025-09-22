@@ -20,7 +20,7 @@ public class BotRunner
     private readonly ConcurrentDictionary<long, AddAnnouncementState> _states = new();
 
     private const string AddLinesPrompt =
-        "Отправь 5 строк: id поста, название турнира, место (можно оставить пустым), дата и время по Москве " +
+        "Отправь 5 строк: id поста, название турнира, место, дата и время по Петербургу " +
         "(пример: 2025-08-10T19:30), стоимость (целое число).";
 
     public BotRunner(ITelegramBotClient bot, long allowedChatId, PostsRepository posts, AnnouncementsRepository ann, FootersRepository footers)

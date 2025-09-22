@@ -20,6 +20,10 @@ internal enum AddStep
 internal class AddAnnouncementState
 {
     public AddStep Step { get; set; } = AddStep.None;
-    public Announcement Draft { get; } = new();
+    public Announcement Draft { get; } = new()
+    {
+        TournamentName = string.Empty,
+        Place = string.Empty
+    };
     public Announcement? Existing { get; set; }
 }
