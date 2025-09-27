@@ -57,7 +57,7 @@ public class BotRunner
         {
             DateTime fromUtc, toUtc;
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
+            if (parts.Length >= 3 && TryParseDateTime(parts[1], out var f) && TryParseDateTime(parts[2], out var t))
             {
                 fromUtc = f;
                 toUtc = t;
@@ -97,7 +97,7 @@ public class BotRunner
             DateTime fromUtc;
             DateTime toUtc;
 
-            if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
+            if (parts.Length >= 3 && TryParseDateTime(parts[1], out var f) && TryParseDateTime(parts[2], out var t))
             {
                 fromUtc = f;
                 toUtc = t;
@@ -208,7 +208,7 @@ public class BotRunner
                 },
                 (existing, newValue) =>
                 {
-                    if (!TryParseMoscowDateTime(newValue, out var parsedUtc))
+                    if (!TryParseDateTime(newValue, out var parsedUtc))
                     {
                         return (false, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)");
                     }
@@ -344,7 +344,7 @@ public class BotRunner
                 break;
 
             case AddStep.WaitingDateTime:
-                if (!TryParseMoscowDateTime(msg.Text, out var utcValue))
+                if (!TryParseDateTime(msg.Text, out var utcValue))
                 {
                     await bot.SendMessage(msg.Chat.Id,
                         "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30",
@@ -425,7 +425,7 @@ public class BotRunner
                     st,
                     existing =>
                     {
-                        if (!TryParseMoscowDateTime(msg.Text, out var parsedUtc))
+                        if (!TryParseDateTime(msg.Text, out var parsedUtc))
                         {
                             return (false,
                                 "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30");
@@ -630,7 +630,7 @@ public class BotRunner
             costLine = lines[4];
         }
 
-        if (!TryParseMoscowDateTime(dateTimeInput, out var dt))
+        if (!TryParseDateTime(dateTimeInput, out var dt))
         {
             error = "Дата и время не распознаны. Пример: 2025-08-10T19:30 или 22 сентября\\n19:30.";
             return false;
@@ -676,7 +676,7 @@ public class BotRunner
     private static readonly CultureInfo RuCulture = new("ru-RU");
     private static readonly Regex YearRegex = new("\\d{4}");
 
-    private static bool TryParseMoscowDateTime(string? input, out DateTime utc)
+    private static bool TryParseDateTime(string? input, out DateTime utc)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -818,11 +818,6 @@ public class BotRunner
     private static bool ContainsYear(string datePart)
     {
         return YearRegex.IsMatch(datePart);
-    }
-
-    private static bool TryParseDate(string s, out DateTime utc)
-    {
-        return TryParseMoscowDateTime(s, out utc);
     }
 
     private static string EscapeForCode(string s)
