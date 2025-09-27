@@ -53,11 +53,11 @@ public static class BotCommands
     };
 
     public static BotCommand?[] AsBotCommands() =>
-        All.Select(c =>
+        [.. All.Select(c =>
             {
                 var cmd = c.TrimStart('/');
                 if (CustomDescriptions.TryGetValue(c, out var desc) && !string.IsNullOrWhiteSpace(desc))
                     return new BotCommand { Command = cmd, Description = desc };
                 return null;
-            }).ToArray();
+            })];
 }
