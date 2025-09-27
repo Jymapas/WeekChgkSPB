@@ -1,22 +1,23 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot;
 
-public class BotRunner
+internal class BotRunner
 {
     private readonly long _allowedChatId;
     private readonly ITelegramBotClient _bot;
     private readonly PostsRepository _posts;
     private readonly AnnouncementsRepository _announcements;
     private readonly FootersRepository _footers;
-    private readonly BotConversationState _stateStore;
     private readonly BotCommandHelper _helper;
+    private readonly BotConversationState _stateStore;
     private readonly IReadOnlyList<IBotCommandHandler> _handlers;
     private readonly ConversationFlowProcessor _flowProcessor;
 
@@ -25,17 +26,21 @@ public class BotRunner
         long allowedChatId,
         PostsRepository posts,
         AnnouncementsRepository announcements,
-        FootersRepository footers)
+        FootersRepository footers,
+        BotCommandHelper helper,
+        BotConversationState stateStore,
+        IEnumerable<IBotCommandHandler> handlers,
+        ConversationFlowProcessor flowProcessor)
     {
         _bot = bot;
         _allowedChatId = allowedChatId;
         _posts = posts;
         _announcements = announcements;
         _footers = footers;
-        _helper = new BotCommandHelper(PostFormatter.Moscow);
-        _stateStore = new BotConversationState();
-        _handlers = BuildHandlers();
-        _flowProcessor = new ConversationFlowProcessor(_helper);
+        _helper = helper;
+        _stateStore = stateStore;
+        _handlers = handlers.ToList();
+        _flowProcessor = flowProcessor;
     }
 
     public void Start(CancellationToken ct)
@@ -91,23 +96,4 @@ public class BotRunner
         }
     }
 
-    private IReadOnlyList<IBotCommandHandler> BuildHandlers()
-    {
-        return new IBotCommandHandler[]
-        {
-            new MakePostCommandHandler(BotCommands.MakePostLJ, asLiveJournal: true),
-            new MakePostCommandHandler(BotCommands.MakePost, asLiveJournal: false),
-            new AddLinesCommandHandler(),
-            new AddCommandHandler(),
-            new EditNameCommandHandler(),
-            new EditPlaceCommandHandler(),
-            new EditDateTimeCommandHandler(),
-            new EditCostCommandHandler(),
-            new EditCommandHandler(),
-            new DeleteAnnouncementCommandHandler(),
-            new FooterAddCommandHandler(),
-            new FooterListCommandHandler(),
-            new FooterDeleteCommandHandler()
-        };
-    }
 }
