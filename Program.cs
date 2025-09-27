@@ -7,6 +7,7 @@ using Telegram.Bot.Types;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
+using WeekChgkSPB.Infrastructure.Bot.Flows;
 using WeekChgkSPB.Infrastructure.Notifications;
 
 internal class Program
@@ -40,7 +41,9 @@ internal class Program
                 services.AddSingleton<INotifier>(_ => new TelegramNotifier(token, chatId));
                 services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
                 services.AddSingleton<BotConversationState>();
-                services.AddSingleton<ConversationFlowProcessor>();
+                services.AddSingleton<IConversationFlowHandler, AddAnnouncementFlow>();
+                services.AddSingleton<IConversationFlowHandler, EditAnnouncementFlow>();
+                services.AddSingleton<IConversationFlowHandler, FooterFlow>();
                 services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
                 services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
                 services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
@@ -64,7 +67,7 @@ internal class Program
                     sp.GetRequiredService<BotCommandHelper>(),
                     sp.GetRequiredService<BotConversationState>(),
                     sp.GetServices<IBotCommandHandler>(),
-                    sp.GetRequiredService<ConversationFlowProcessor>()));
+                    sp.GetServices<IConversationFlowHandler>()));
             })
             .Build();
 

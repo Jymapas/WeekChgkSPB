@@ -19,7 +19,7 @@ internal class BotRunner
     private readonly BotCommandHelper _helper;
     private readonly BotConversationState _stateStore;
     private readonly IReadOnlyList<IBotCommandHandler> _handlers;
-    private readonly ConversationFlowProcessor _flowProcessor;
+    private readonly IReadOnlyList<IConversationFlowHandler> _flows;
 
     public BotRunner(
         ITelegramBotClient bot,
@@ -30,7 +30,7 @@ internal class BotRunner
         BotCommandHelper helper,
         BotConversationState stateStore,
         IEnumerable<IBotCommandHandler> handlers,
-        ConversationFlowProcessor flowProcessor)
+        IEnumerable<IConversationFlowHandler> flows)
     {
         _bot = bot;
         _allowedChatId = allowedChatId;
@@ -40,7 +40,7 @@ internal class BotRunner
         _helper = helper;
         _stateStore = stateStore;
         _handlers = handlers.ToList();
-        _flowProcessor = flowProcessor;
+        _flows = flows.ToList();
     }
 
     public void Start(CancellationToken ct)
@@ -90,9 +90,27 @@ internal class BotRunner
             }
         }
 
-        if (await _flowProcessor.TryHandleAsync(context))
+        if (message.From is null)
         {
             return;
+        }
+
+        if (!_stateStore.TryGet(message.From.Id, out var state) || state is null || state.Step == AddStep.None)
+        {
+            return;
+        }
+
+        foreach (var flow in _flows)
+        {
+            if (!flow.CanHandle(state.Step))
+            {
+                continue;
+            }
+
+            if (await flow.HandleAsync(context, state))
+            {
+                return;
+            }
         }
     }
 
