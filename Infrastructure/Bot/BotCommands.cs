@@ -37,8 +37,8 @@ public static class BotCommands
 
     private readonly static Dictionary<string, string> CustomDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        [MakePostLJ] = "Создать пост для LiveJournal",
         [MakePost] = "Создать пост",
+        [MakePostLJ] = "Создать пост для LiveJournal",
         [Add] = "Добавить анонс единым блоком",
         [AddLines] = "Добавить анонс по шагам",
         [Edit] = "Редактировать анонс",
