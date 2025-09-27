@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -18,6 +19,11 @@ public class BotRunner
     private readonly FootersRepository _footers;
 
     private readonly ConcurrentDictionary<long, AddAnnouncementState> _states = new();
+
+    private const string AddLinesPrompt =
+        "Отправь 5 или 6 строк: id поста, название турнира, место, дата и время по Петербургу " +
+        "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
+        "стоимость (целое число).";
 
     public BotRunner(ITelegramBotClient bot, long allowedChatId, PostsRepository posts, AnnouncementsRepository ann, FootersRepository footers)
     {
@@ -51,7 +57,7 @@ public class BotRunner
         {
             DateTime fromUtc, toUtc;
             var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
+            if (parts.Length >= 3 && TryParseDateTime(parts[1], out var f) && TryParseDateTime(parts[2], out var t))
             {
                 fromUtc = f;
                 toUtc = t;
@@ -91,7 +97,7 @@ public class BotRunner
             DateTime fromUtc;
             DateTime toUtc;
 
-            if (parts.Length >= 3 && TryParseDate(parts[1], out var f) && TryParseDate(parts[2], out var t))
+            if (parts.Length >= 3 && TryParseDateTime(parts[1], out var f) && TryParseDateTime(parts[2], out var t))
             {
                 fromUtc = f;
                 toUtc = t;
@@ -125,20 +131,28 @@ public class BotRunner
             return;
         }
 
-        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase))
+        if (msg.Text.StartsWith(BotCommands.AddLines, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
             st.Existing = null;
             st.Step = AddStep.WaitingId;
-            st.Draft.Id = 0;
-            st.Draft.TournamentName = "";
-            st.Draft.Place = "";
-            st.Draft.DateTimeUtc = DateTime.MinValue;
-            st.Draft.Cost = 0;
+            ResetDraft(st);
 
             await bot.SendMessage(msg.Chat.Id, "Отправь id поста", cancellationToken: ct);
             return;
         }
+
+        if (msg.Text.StartsWith(BotCommands.Add, StringComparison.OrdinalIgnoreCase))
+        {
+            var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
+            st.Existing = null;
+            st.Step = AddStep.WaitingLines;
+            ResetDraft(st);
+
+            await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
+            return;
+        }
+
         if (msg.Text.StartsWith(BotCommands.EditName, StringComparison.OrdinalIgnoreCase))
         {
             await HandleEditCommand(
@@ -188,16 +202,18 @@ public class BotRunner
                 AddStep.EditWaitingDateTime,
                 "/edit_datetime <id> [новая дата и время]",
                 existing =>
-                    $"Редактирование анонса {existing.Id}.\nТекущая дата и время: {existing.DateTimeUtc:O}\nОтправь новую дату и время в формате ISO 8601 UTC",
+                {
+                    var local = TimeZoneInfo.ConvertTimeFromUtc(existing.DateTimeUtc, PostFormatter.Moscow);
+                    return $"Редактирование анонса {existing.Id}.\nТекущая дата и время (Москва): {local:yyyy-MM-dd HH:mm}\nОтправь новую дату и время по Москве";
+                },
                 (existing, newValue) =>
                 {
-                    if (!DateTime.TryParse(newValue, null,
-                            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                    if (!TryParseDateTime(newValue, out var parsedUtc))
                     {
-                        return (false, "Неверный формат. Пример: 2025-08-10T19:30:00Z");
+                        return (false, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)");
                     }
 
-                    existing.DateTimeUtc = parsed.ToUniversalTime();
+                    existing.DateTimeUtc = parsedUtc;
                     return (true, "Дата и время обновлены");
                 },
                 ct);
@@ -322,19 +338,21 @@ public class BotRunner
                 st.Draft.Place = msg.Text?.Trim() ?? string.Empty;
                 st.Step = AddStep.WaitingDateTime;
                 await bot.SendMessage(msg.Chat.Id,
-                    "Дата и время (ISO 8601 UTC; пример: 2025-08-10T19:30:00Z)", cancellationToken: ct);
+                    "Дата и время по Москве. Можно отправить ISO (пример: 2025-08-10T19:30) " +
+                    "или двумя строками: дата (например, 22 сентября) и новой строкой время (например, 19:30)",
+                    cancellationToken: ct);
                 break;
 
             case AddStep.WaitingDateTime:
-                if (!DateTime.TryParse(msg.Text, null,
-                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+                if (!TryParseDateTime(msg.Text, out var utcValue))
                 {
-                    await bot.SendMessage(msg.Chat.Id, "Неверный формат. Пример: 2025-08-10T19:30:00Z",
+                    await bot.SendMessage(msg.Chat.Id,
+                        "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30",
                         cancellationToken: ct);
                     return;
                 }
 
-                st.Draft.DateTimeUtc = dt.ToUniversalTime();
+                st.Draft.DateTimeUtc = utcValue;
                 st.Step = AddStep.WaitingCost;
                 await bot.SendMessage(msg.Chat.Id, "Стоимость (целое число)", cancellationToken: ct);
                 break;
@@ -353,6 +371,20 @@ public class BotRunner
                 await bot.SendMessage(msg.Chat.Id, "Сохранено", cancellationToken: ct);
                 _states.TryRemove(msg.From!.Id, out _);
                 st.Existing = null;
+                break;
+
+            case AddStep.WaitingLines:
+                if (await TryProcessAddLines(bot, msg, msg.Text ?? string.Empty, ct))
+                {
+                    st.Step = AddStep.Done;
+                    _states.TryRemove(msg.From!.Id, out _);
+                    st.Existing = null;
+                    ResetDraft(st);
+                }
+                else
+                {
+                    await bot.SendMessage(msg.Chat.Id, AddLinesPrompt, cancellationToken: ct);
+                }
                 break;
 
             case AddStep.EditWaitingName:
@@ -393,14 +425,13 @@ public class BotRunner
                     st,
                     existing =>
                     {
-                        if (!DateTime.TryParse(msg.Text, null,
-                                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
-                                out var parsed))
+                        if (!TryParseDateTime(msg.Text, out var parsedUtc))
                         {
-                            return (false, "Неверный формат. Пример: 2025-08-10T19:30:00Z");
+                            return (false,
+                                "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30");
                         }
 
-                        existing.DateTimeUtc = parsed.ToUniversalTime();
+                        existing.DateTimeUtc = parsedUtc;
                         return (true, "Дата и время обновлены");
                     },
                     ct);
@@ -425,14 +456,14 @@ public class BotRunner
                 break;
 
             case AddStep.FooterWaitingText:
-            {
-                var html = msg.Text!.Trim();
-                var footerId = _footers.Insert(html);
-                await bot.SendMessage(msg.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: ct);
-                st.Step = AddStep.Done;
-                _states.TryRemove(msg.From!.Id, out _);
-                break;
-            }
+                {
+                    var html = msg.Text!.Trim();
+                    var footerId = _footers.Insert(html);
+                    await bot.SendMessage(msg.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: ct);
+                    st.Step = AddStep.Done;
+                    _states.TryRemove(msg.From!.Id, out _);
+                    break;
+                }
         }
     }
 
@@ -519,16 +550,274 @@ public class BotRunner
         st.Existing = null;
     }
 
-    private static bool TryParseDate(string s, out DateTime utc)
+    private async Task<bool> TryProcessAddLines(ITelegramBotClient bot, Message msg, string content, CancellationToken ct)
     {
-        if (DateTime.TryParse(s, null, DateTimeStyles.AssumeLocal, out var dt))
+        if (!TryBuildAnnouncementFromLines(content, out var announcement, out var error))
         {
-            utc = dt.ToUniversalTime();
+            await bot.SendMessage(msg.Chat.Id, error, cancellationToken: ct);
+            return false;
+        }
+
+        if (!_posts.Exists(announcement.Id))
+        {
+            await bot.SendMessage(msg.Chat.Id, "Такого поста нет в базе", cancellationToken: ct);
+            return false;
+        }
+
+        if (_ann.Exists(announcement.Id))
+        {
+            await bot.SendMessage(msg.Chat.Id, "Анонс для этого id уже есть", cancellationToken: ct);
+            return false;
+        }
+
+        _ann.Insert(announcement);
+        await bot.SendMessage(msg.Chat.Id, "Сохранено", cancellationToken: ct);
+        _states.TryRemove(msg.From!.Id, out _);
+        return true;
+    }
+
+    private static bool TryBuildAnnouncementFromLines(string content, out Announcement announcement, out string error)
+    {
+        announcement = default!;
+
+        var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
+        var rawLines = normalized.Split('\n');
+        var lines = rawLines.Select(static line => line.Trim()).ToList();
+
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        if (lines.Count < 5)
+        {
+            error = "Нужно передать 5 или 6 строк: id, название, место, дата и время (одна строка ISO или две строки), стоимость.";
+            return false;
+        }
+
+        if (lines.Count > 6)
+        {
+            error = "Ожидаю 5 или 6 строк без дополнительного текста.";
+            return false;
+        }
+
+        if (!long.TryParse(lines[0], out var id))
+        {
+            error = "Первая строка — числовой id.";
+            return false;
+        }
+
+        var name = lines[1];
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Вторая строка должна содержать название турнира.";
+            return false;
+        }
+
+        var place = lines[2];
+
+        string dateTimeInput;
+        string costLine;
+
+        if (lines.Count == 6)
+        {
+            dateTimeInput = lines[3] + "\n" + lines[4];
+            costLine = lines[5];
+        }
+        else
+        {
+            dateTimeInput = lines[3];
+            costLine = lines[4];
+        }
+
+        if (!TryParseDateTime(dateTimeInput, out var dt))
+        {
+            error = "Дата и время не распознаны. Пример: 2025-08-10T19:30 или 22 сентября\\n19:30.";
+            return false;
+        }
+
+        if (!int.TryParse(costLine, out var cost))
+        {
+            error = "Строка со стоимостью должна содержать целое число.";
+            return false;
+        }
+
+        announcement = new Announcement
+        {
+            Id = id,
+            TournamentName = name,
+            Place = place,
+            DateTimeUtc = dt,
+            Cost = cost
+        };
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static void ResetDraft(AddAnnouncementState st)
+    {
+        st.Draft.Id = 0;
+        st.Draft.TournamentName = string.Empty;
+        st.Draft.Place = string.Empty;
+        st.Draft.DateTimeUtc = DateTime.MinValue;
+        st.Draft.Cost = 0;
+    }
+
+    private static readonly string[] MoscowDateTimeFormats =
+    {
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd"
+    };
+
+    private static readonly CultureInfo RuCulture = new("ru-RU");
+    private static readonly Regex YearRegex = new("\\d{4}");
+
+    private static bool TryParseDateTime(string? input, out DateTime utc)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            utc = default;
+            return false;
+        }
+
+        var normalized = input.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+        var parts = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length == 2 && TryParseHumanDateTime(parts[0], parts[1], out utc))
+        {
+            return true;
+        }
+
+        if (parts.Length == 1)
+        {
+            var single = parts[0];
+
+            if (TryParseSingleLineHumanDateTime(single, out utc))
+            {
+                return true;
+            }
+
+            if (DateTimeOffset.TryParse(single, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal, out var dtoSingle))
+            {
+                utc = dtoSingle.UtcDateTime;
+                return true;
+            }
+
+            if (DateTime.TryParseExact(single, MoscowDateTimeFormats,
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var localSingle))
+            {
+                var unspecifiedLocal = DateTime.SpecifyKind(localSingle, DateTimeKind.Unspecified);
+                utc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedLocal, PostFormatter.Moscow);
+                return true;
+            }
+
+            if (DateTime.TryParse(single, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var ruLocal))
+            {
+                var unspecifiedLocal = DateTime.SpecifyKind(ruLocal, DateTimeKind.Unspecified);
+                utc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedLocal, PostFormatter.Moscow);
+                return true;
+            }
+        }
+
+        if (DateTimeOffset.TryParse(normalized, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var dto))
+        {
+            utc = dto.UtcDateTime;
+            return true;
+        }
+
+        if (DateTime.TryParseExact(normalized, MoscowDateTimeFormats,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+        {
+            var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+            utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+            return true;
+        }
+
+        if (DateTime.TryParse(normalized, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var ruLocalFallback))
+        {
+            var unspecified = DateTime.SpecifyKind(ruLocalFallback, DateTimeKind.Unspecified);
+            utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
             return true;
         }
 
         utc = default;
         return false;
+    }
+
+    private static bool TryParseHumanDateTime(string datePart, string timePart, out DateTime utc)
+    {
+        if (!TryBuildLocalFromHuman(datePart, timePart, out var local))
+        {
+            utc = default;
+            return false;
+        }
+
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+        return true;
+    }
+
+    private static bool TryParseSingleLineHumanDateTime(string single, out DateTime utc)
+    {
+        utc = default;
+
+        var pieces = single.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (pieces.Length < 2)
+        {
+            return false;
+        }
+
+        var datePart = string.Join(' ', pieces[..^1]);
+        var timePart = pieces[^1];
+
+        if (!TryBuildLocalFromHuman(datePart, timePart, out var local))
+        {
+            return false;
+        }
+
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, PostFormatter.Moscow);
+        return true;
+    }
+
+    private static bool TryBuildLocalFromHuman(string datePart, string timePart, out DateTime local)
+    {
+        local = default;
+
+        if (!TimeSpan.TryParse(timePart, CultureInfo.InvariantCulture, out var timeOfDay))
+        {
+            return false;
+        }
+
+        if (!DateTime.TryParse(datePart, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var dateOnly))
+        {
+            return false;
+        }
+
+        local = new DateTime(dateOnly.Year, dateOnly.Month, dateOnly.Day,
+            timeOfDay.Hours, timeOfDay.Minutes, timeOfDay.Seconds);
+
+        if (!ContainsYear(datePart))
+        {
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PostFormatter.Moscow);
+            if (local < nowLocal)
+            {
+                local = local.AddYears(1);
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ContainsYear(string datePart)
+    {
+        return YearRegex.IsMatch(datePart);
     }
 
     private static string EscapeForCode(string s)
