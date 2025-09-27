@@ -132,4 +132,14 @@ public class AnnouncementsRepository
 
         return list;
     }
+
+    public bool Delete(long id)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM announcements WHERE id=@id";
+        cmd.Parameters.AddWithValue("@id", id);
+        return cmd.ExecuteNonQuery() > 0;
+    }
 }

@@ -13,6 +13,7 @@ public static class BotCommands
     public const string EditPlace = "/edit_place";
     public const string EditDateTime = "/edit_datetime";
     public const string EditCost = "/edit_cost";
+    public const string Delete = "/delete";
     public const string FooterAdd = "/footer_add";
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
@@ -28,6 +29,7 @@ public static class BotCommands
         EditPlace,
         EditDateTime,
         EditCost,
+        Delete,
         FooterAdd,
         FooterList,
         FooterDel,
@@ -44,17 +46,18 @@ public static class BotCommands
         [EditPlace] = "Изменить место проведения",
         [EditDateTime] = "Изменить дату и время",
         [EditCost] = "Изменить стоимость",
+        [Delete] = "Удалить анонс",
         [FooterAdd] = "Добавить футер",
         [FooterList] = "Список футеров",
         [FooterDel] = "Удалить футер",
     };
 
     public static BotCommand?[] AsBotCommands() =>
-        All.Select(c =>
+        [.. All.Select(c =>
             {
                 var cmd = c.TrimStart('/');
                 if (CustomDescriptions.TryGetValue(c, out var desc) && !string.IsNullOrWhiteSpace(desc))
                     return new BotCommand { Command = cmd, Description = desc };
                 return null;
-            }).ToArray();
+            })];
 }

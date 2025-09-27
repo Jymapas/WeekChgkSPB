@@ -250,6 +250,31 @@ public class BotRunner
             return;
         }
 
+        if (msg.Text.StartsWith(BotCommands.Delete, StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = msg.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || !long.TryParse(parts[1], out var id))
+            {
+                await bot.SendMessage(msg.Chat.Id, "Используй: /delete <id>", cancellationToken: ct);
+                return;
+            }
+
+            var existing = _ann.Get(id);
+            if (existing is null)
+            {
+                await bot.SendMessage(msg.Chat.Id, "Анонс с таким id не найден", cancellationToken: ct);
+                return;
+            }
+
+            _ann.Delete(id);
+            _states.TryRemove(msg.From!.Id, out _);
+            await bot.SendMessage(
+                msg.Chat.Id,
+                $"Анонс {existing.Id} ({existing.TournamentName}) удален",
+                cancellationToken: ct);
+            return;
+        }
+
         if (msg.Text.StartsWith(BotCommands.FooterAdd, StringComparison.OrdinalIgnoreCase))
         {
             var st = _states.AddOrUpdate(msg.From!.Id, _ => new AddAnnouncementState(), (_, s) => s);
