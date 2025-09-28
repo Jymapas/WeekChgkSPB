@@ -1,6 +1,4 @@
 using System.Threading.Tasks;
-using Moq;
-using Telegram.Bot;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;

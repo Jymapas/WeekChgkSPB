@@ -19,7 +19,7 @@ internal class BotRunner
     private readonly BotCommandHelper _helper;
     private readonly BotConversationState _stateStore;
     private readonly IReadOnlyList<IBotCommandHandler> _handlers;
-    private readonly IReadOnlyList<IConversationFlowHandler> _flows;
+    private readonly IReadOnlyDictionary<AddStep, IReadOnlyList<IConversationFlowHandler>> _flowsByStep;
 
     public BotRunner(
         ITelegramBotClient bot,
@@ -40,7 +40,7 @@ internal class BotRunner
         _helper = helper;
         _stateStore = stateStore;
         _handlers = handlers.ToList();
-        _flows = flows.ToList();
+        _flowsByStep = SplitFlows(flows);
     }
 
     public void Start(CancellationToken ct)
@@ -55,7 +55,7 @@ internal class BotRunner
         return Task.CompletedTask;
     }
 
-    private async Task HandleUpdate(ITelegramBotClient bot, Update update, CancellationToken ct)
+    internal async Task HandleUpdate(ITelegramBotClient bot, Update update, CancellationToken ct)
     {
         var message = update.Message;
         if (message is null)
@@ -100,13 +100,13 @@ internal class BotRunner
             return;
         }
 
-        foreach (var flow in _flows)
+        if (!_flowsByStep.TryGetValue(state.Step, out var flows))
         {
-            if (!flow.CanHandle(state.Step))
-            {
-                continue;
-            }
+            return;
+        }
 
+        foreach (var flow in flows)
+        {
             if (await flow.HandleAsync(context, state))
             {
                 return;
@@ -114,4 +114,41 @@ internal class BotRunner
         }
     }
 
+    internal static IReadOnlyDictionary<AddStep, IReadOnlyList<IConversationFlowHandler>> SplitFlows(IEnumerable<IConversationFlowHandler> flows)
+    {
+        if (flows is null) throw new ArgumentNullException(nameof(flows));
+
+        var map = new Dictionary<AddStep, List<IConversationFlowHandler>>();
+        foreach (var flow in flows)
+        {
+            foreach (var step in Enum.GetValues<AddStep>())
+            {
+                if (step is AddStep.None or AddStep.Done)
+                {
+                    continue;
+                }
+
+                if (!flow.CanHandle(step))
+                {
+                    continue;
+                }
+
+                if (!map.TryGetValue(step, out var list))
+                {
+                    list = new List<IConversationFlowHandler>();
+                    map[step] = list;
+                }
+
+                list.Add(flow);
+            }
+        }
+
+        var result = new Dictionary<AddStep, IReadOnlyList<IConversationFlowHandler>>(map.Count);
+        foreach (var (step, flowsForStep) in map)
+        {
+            result[step] = flowsForStep;
+        }
+
+        return result;
+    }
 }
