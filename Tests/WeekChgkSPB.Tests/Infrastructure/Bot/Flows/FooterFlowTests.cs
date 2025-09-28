@@ -9,15 +9,22 @@ using WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
 namespace WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
-public class FooterFlowTests
+public class FooterFlowTests : IClassFixture<SqliteFixture>
 {
+    private readonly SqliteFixture _fixture;
+
+    public FooterFlowTests(SqliteFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
     [Fact]
     public async Task HandleAsync_InsertsFooterAndCompletes()
     {
-        using var tempDb = new SqliteTempFile();
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var posts = new PostsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
@@ -53,10 +60,10 @@ public class FooterFlowTests
     [Fact]
     public async Task HandleAsync_EmptyText_KeepsWaiting()
     {
-        using var tempDb = new SqliteTempFile();
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var posts = new PostsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();

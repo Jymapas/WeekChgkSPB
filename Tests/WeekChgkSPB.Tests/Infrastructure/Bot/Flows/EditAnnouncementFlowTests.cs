@@ -10,15 +10,22 @@ using WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
 namespace WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
-public class EditAnnouncementFlowTests
+public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
 {
+    private readonly SqliteFixture _fixture;
+
+    public EditAnnouncementFlowTests(SqliteFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
     [Fact]
     public async Task HandleEditWaitingName_UpdatesAnnouncementAndFinishes()
     {
-        using var tempDb = new SqliteTempFile();
-        var repo = new AnnouncementsRepository(tempDb.Path);
-        var posts = new PostsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var repo = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 5, Title = "Title", Link = "Link", Description = "Desc" });
         var announcement = new Announcement
@@ -65,10 +72,10 @@ public class EditAnnouncementFlowTests
     [Fact]
     public async Task HandleEditWaitingDateTime_InvalidFormat_KeepsWaiting()
     {
-        using var tempDb = new SqliteTempFile();
-        var repo = new AnnouncementsRepository(tempDb.Path);
-        var posts = new PostsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var repo = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 8, Title = "T", Link = "L", Description = "D" });
         var announcement = new Announcement
@@ -115,10 +122,10 @@ public class EditAnnouncementFlowTests
     [Fact]
     public async Task HandleEditWaitingCost_InvalidNumber_KeepsWaiting()
     {
-        using var tempDb = new SqliteTempFile();
-        var repo = new AnnouncementsRepository(tempDb.Path);
-        var posts = new PostsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var repo = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 9, Title = "T", Link = "L", Description = "D" });
         var announcement = new Announcement

@@ -9,15 +9,22 @@ using WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
 namespace WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
-public class AddAnnouncementFlowTests
+public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
 {
+    private readonly SqliteFixture _fixture;
+
+    public AddAnnouncementFlowTests(SqliteFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
     [Fact]
     public async Task HandleWaitingId_WhenPostExists_MovesToWaitingName()
     {
-        using var tempDb = new SqliteTempFile();
-        var posts = new PostsRepository(tempDb.Path);
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
         posts.Insert(new Post { Id = 42, Title = "t", Link = "l", Description = "d" });
 
         var helper = new BotCommandHelper(PostFormatter.Moscow);
@@ -51,10 +58,10 @@ public class AddAnnouncementFlowTests
     [Fact]
     public async Task HandleWaitingLines_ValidPayload_InsertsAnnouncementAndCompletes()
     {
-        using var tempDb = new SqliteTempFile();
-        var posts = new PostsRepository(tempDb.Path);
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 7, Title = "title", Link = "link", Description = "desc" });
 
@@ -99,10 +106,10 @@ public class AddAnnouncementFlowTests
     [Fact]
     public async Task HandleWaitingDateTime_InvalidFormat_DoesNotAdvance()
     {
-        using var tempDb = new SqliteTempFile();
-        var posts = new PostsRepository(tempDb.Path);
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 10, Title = "t", Link = "l", Description = "d" });
 
@@ -138,10 +145,10 @@ public class AddAnnouncementFlowTests
     [Fact]
     public async Task HandleWaitingLines_InvalidPayload_KeepsState()
     {
-        using var tempDb = new SqliteTempFile();
-        var posts = new PostsRepository(tempDb.Path);
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 11, Title = "title", Link = "link", Description = "desc" });
 
@@ -178,10 +185,10 @@ public class AddAnnouncementFlowTests
     [Fact]
     public async Task HandleWaitingCost_InvalidNumber_KeepsWaiting()
     {
-        using var tempDb = new SqliteTempFile();
-        var posts = new PostsRepository(tempDb.Path);
-        var announcements = new AnnouncementsRepository(tempDb.Path);
-        var footers = new FootersRepository(tempDb.Path);
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
 
         posts.Insert(new Post { Id = 12, Title = "title", Link = "link", Description = "desc" });
 
