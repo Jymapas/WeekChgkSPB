@@ -112,4 +112,54 @@ public class EditAnnouncementFlowTests
         Assert.Equal(announcement.DateTimeUtc, repo.Get(8)!.DateTimeUtc);
     }
 
+    [Fact]
+    public async Task HandleEditWaitingCost_InvalidNumber_KeepsWaiting()
+    {
+        using var tempDb = new SqliteTempFile();
+        var repo = new AnnouncementsRepository(tempDb.Path);
+        var posts = new PostsRepository(tempDb.Path);
+        var footers = new FootersRepository(tempDb.Path);
+
+        posts.Insert(new Post { Id = 9, Title = "T", Link = "L", Description = "D" });
+        var announcement = new Announcement
+        {
+            Id = 9,
+            TournamentName = "Name",
+            Place = "Place",
+            DateTimeUtc = DateTime.UtcNow,
+            Cost = 50
+        };
+        repo.Insert(announcement);
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 557;
+        const long chatId = 44;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.EditWaitingCost;
+        state.Existing = repo.Get(9);
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            "не число",
+            chatId,
+            userId,
+            repo,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new EditAnnouncementFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.Equal(AddStep.EditWaitingCost, state.Step);
+        Assert.True(stateStore.TryGet(userId, out var storedState));
+        Assert.Same(state, storedState);
+        Assert.Equal(50, repo.Get(9)!.Cost);
+    }
+
 }
