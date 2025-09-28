@@ -96,4 +96,83 @@ public class AddAnnouncementFlowTests
         Assert.False(stateStore.TryGet(userId, out _));
     }
 
+    [Fact]
+    public async Task HandleWaitingDateTime_InvalidFormat_DoesNotAdvance()
+    {
+        using var tempDb = new SqliteTempFile();
+        var posts = new PostsRepository(tempDb.Path);
+        var announcements = new AnnouncementsRepository(tempDb.Path);
+        var footers = new FootersRepository(tempDb.Path);
+
+        posts.Insert(new Post { Id = 10, Title = "t", Link = "l", Description = "d" });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 301;
+        const long chatId = 1001;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingDateTime;
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            "не дата",
+            chatId,
+            userId,
+            announcements,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new AddAnnouncementFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.Equal(AddStep.WaitingDateTime, state.Step);
+        Assert.True(stateStore.TryGet(userId, out var storedState));
+        Assert.Same(state, storedState);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_InvalidPayload_KeepsState()
+    {
+        using var tempDb = new SqliteTempFile();
+        var posts = new PostsRepository(tempDb.Path);
+        var announcements = new AnnouncementsRepository(tempDb.Path);
+        var footers = new FootersRepository(tempDb.Path);
+
+        posts.Insert(new Post { Id = 11, Title = "title", Link = "link", Description = "desc" });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 302;
+        const long chatId = 1002;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            "только одна строка",
+            chatId,
+            userId,
+            announcements,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new AddAnnouncementFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.Equal(AddStep.WaitingLines, state.Step);
+        Assert.False(announcements.Exists(11));
+        Assert.True(stateStore.TryGet(userId, out var storedState));
+        Assert.Same(state, storedState);
+    }
+
 }

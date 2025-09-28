@@ -49,4 +49,42 @@ public class FooterFlowTests
         Assert.Single(items);
         Assert.Equal("<b>footer</b>", items[0].Text);
     }
+
+    [Fact]
+    public async Task HandleAsync_EmptyText_KeepsWaiting()
+    {
+        using var tempDb = new SqliteTempFile();
+        var announcements = new AnnouncementsRepository(tempDb.Path);
+        var posts = new PostsRepository(tempDb.Path);
+        var footers = new FootersRepository(tempDb.Path);
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 700;
+        const long chatId = 701;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.FooterWaitingText;
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            "   ",
+            chatId,
+            userId,
+            announcements,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new FooterFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.Equal(AddStep.FooterWaitingText, state.Step);
+        Assert.True(stateStore.TryGet(userId, out var storedState));
+        Assert.Same(state, storedState);
+        Assert.Empty(footers.ListAllDesc());
+    }
 }
