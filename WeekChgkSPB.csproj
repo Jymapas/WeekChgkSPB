@@ -17,9 +17,19 @@
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="WeekChgkSPB.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <None Include=".env">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Remove="Tests/**/*.cs" />
+        <EmbeddedResource Remove="Tests/**/*.resx" />
+        <None Remove="Tests/**/*.cs" />
     </ItemGroup>
 
 </Project>
