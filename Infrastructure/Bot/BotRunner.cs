@@ -100,12 +100,12 @@ internal class BotRunner
             return;
         }
 
-        if (!_flowsByStep.TryGetValue(state.Step, out var flows))
+        if (!_flowsByStep.TryGetValue(state.Step, out var flowsForStep))
         {
             return;
         }
 
-        foreach (var flow in flows)
+        foreach (var flow in flowsForStep)
         {
             if (await flow.HandleAsync(context, state))
             {
@@ -116,12 +116,17 @@ internal class BotRunner
 
     internal static IReadOnlyDictionary<AddStep, IReadOnlyList<IConversationFlowHandler>> SplitFlows(IEnumerable<IConversationFlowHandler> flows)
     {
-        if (flows is null) throw new ArgumentNullException(nameof(flows));
+        if (flows is null)
+        {
+            throw new ArgumentNullException(nameof(flows));
+        }
 
-        var map = new Dictionary<AddStep, List<IConversationFlowHandler>>();
+        var steps = Enum.GetValues<AddStep>();
+        var grouped = new Dictionary<AddStep, List<IConversationFlowHandler>>();
+
         foreach (var flow in flows)
         {
-            foreach (var step in Enum.GetValues<AddStep>())
+            foreach (var step in steps)
             {
                 if (step is AddStep.None or AddStep.Done)
                 {
@@ -133,20 +138,20 @@ internal class BotRunner
                     continue;
                 }
 
-                if (!map.TryGetValue(step, out var list))
+                if (!grouped.TryGetValue(step, out var list))
                 {
                     list = new List<IConversationFlowHandler>();
-                    map[step] = list;
+                    grouped[step] = list;
                 }
 
                 list.Add(flow);
             }
         }
 
-        var result = new Dictionary<AddStep, IReadOnlyList<IConversationFlowHandler>>(map.Count);
-        foreach (var (step, flowsForStep) in map)
+        var result = new Dictionary<AddStep, IReadOnlyList<IConversationFlowHandler>>(grouped.Count);
+        foreach (var (step, list) in grouped)
         {
-            result[step] = flowsForStep;
+            result[step] = list;
         }
 
         return result;
