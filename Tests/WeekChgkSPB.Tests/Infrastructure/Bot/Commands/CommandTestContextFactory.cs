@@ -28,21 +28,17 @@ internal static class CommandTestContextFactory
             .ReturnsAsync((IRequest<Message> request, CancellationToken _) =>
             {
                 var textProp = request.GetType().GetProperty("Text");
-                var textValue = textProp?.GetValue(request) as string ?? string.Empty;
-                messages.Add(textValue);
-                return new Message { Text = textValue };
+                var sentText = textProp?.GetValue(request) as string ?? string.Empty;
+                messages.Add(sentText);
+                return new Message { Text = sentText };
             });
-
-        object? from = userId.HasValue
-            ? new { id = userId.Value, is_bot = false, first_name = "user" }
-            : null;
 
         var payload = new
         {
             message_id = 1,
             text,
             chat = new { id = chatId, type = "private" },
-            from
+            from = userId.HasValue ? new { id = userId.Value, is_bot = false, first_name = "user" } : null
         };
 
         var message = JsonSerializer.Deserialize<Message>(

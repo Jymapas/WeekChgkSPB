@@ -34,6 +34,8 @@ public class AddCommandHandlerTests : IClassFixture<SqliteFixture>
             helper,
             stateStore);
 
+        Assert.True(handler.CanHandle(context));
+
         await handler.HandleAsync(context);
 
         Assert.True(stateStore.TryGet(1, out var state));

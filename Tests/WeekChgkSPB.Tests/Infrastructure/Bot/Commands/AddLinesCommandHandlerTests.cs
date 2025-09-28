@@ -34,8 +34,7 @@ public class AddLinesCommandHandlerTests : IClassFixture<SqliteFixture>
             helper,
             stateStore);
 
-        var result = handler.CanHandle(context);
-        Assert.True(result);
+        Assert.True(handler.CanHandle(context));
 
         await handler.HandleAsync(context);
 
@@ -47,7 +46,7 @@ public class AddLinesCommandHandlerTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleAsync_NoUser_SkipsProcessing()
+    public async Task HandleAsync_NoUser_DoesNothing()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();

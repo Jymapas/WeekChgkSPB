@@ -1,12 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
-using Moq;
-using Telegram.Bot;
-using Telegram.Bot.Requests.Abstractions;
-using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -24,12 +17,12 @@ public class MakePostCommandHandlerTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleAsync_BuildsScheduleAndSendsMessage()
+    public async Task HandleAsync_BuildsSchedule()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
-        var footersRepo = _fixture.CreateFootersRepository();
         var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -42,43 +35,39 @@ public class MakePostCommandHandlerTests : IClassFixture<SqliteFixture>
             DateTimeUtc = new DateTime(2025, 1, 5, 15, 0, 0, DateTimeKind.Utc),
             Cost = 100
         });
-        footersRepo.Insert("footer");
+        footers.Insert("footer");
 
-        var handler = new MakePostCommandHandler(BotCommands.MakePost, asLiveJournal: false);
+        var handler = new MakePostCommandHandler(BotCommands.MakePost, false);
         var (context, sent, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.MakePost} 2025-01-01 2025-01-14",
+            $"{BotCommands.MakePost} 2025-01-01 2025-01-10",
             announcements,
             posts,
-            footersRepo,
+            footers,
             helper,
             stateStore);
-
-        var canHandle = handler.CanHandle(context);
-        Assert.True(canHandle);
 
         await handler.HandleAsync(context);
 
         Assert.Single(sent);
-        Assert.False(string.IsNullOrWhiteSpace(sent[0]));
-        Assert.DoesNotContain("анонсов нет", sent[0]);
+        Assert.Contains("Tournament", sent[0]);
     }
 
     [Fact]
-    public async Task HandleAsync_NoAnnouncements_SendsWarning()
+    public async Task HandleAsync_WhenEmptyRange_SendsNotice()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
-        var footersRepo = _fixture.CreateFootersRepository();
         var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        var handler = new MakePostCommandHandler(BotCommands.MakePost, asLiveJournal: false);
+        var handler = new MakePostCommandHandler(BotCommands.MakePost, false);
         var (context, sent, _) = CommandTestContextFactory.Create(
             BotCommands.MakePost,
             announcements,
             posts,
-            footersRepo,
+            footers,
             helper,
             stateStore);
 
@@ -87,5 +76,4 @@ public class MakePostCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Single(sent);
         Assert.Contains("анонсов нет", sent[0]);
     }
-
 }

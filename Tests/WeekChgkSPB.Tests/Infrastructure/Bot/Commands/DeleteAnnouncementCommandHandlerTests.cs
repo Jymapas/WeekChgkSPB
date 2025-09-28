@@ -42,7 +42,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
     }
 
     [Fact]
-    public async Task HandleAsync_NotFound_SendsError()
+    public async Task HandleAsync_NotFound_SendsNotFoundMessage()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();
@@ -67,7 +67,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
     }
 
     [Fact]
-    public async Task HandleAsync_ValidId_DeletesAndSendsConfirmation()
+    public async Task HandleAsync_ValidId_DeletesAnnouncement()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();

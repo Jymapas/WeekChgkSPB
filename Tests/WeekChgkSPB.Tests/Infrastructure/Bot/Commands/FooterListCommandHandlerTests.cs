@@ -16,7 +16,7 @@ public class FooterListCommandHandlerTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleAsync_NoFooters_SendsEmptyMessage()
+    public async Task HandleAsync_NoFooters_ReportsEmpty()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();
@@ -41,7 +41,7 @@ public class FooterListCommandHandlerTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleAsync_WithFooters_SendsFormattedList()
+    public async Task HandleAsync_WithFooters_RendersList()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();
@@ -50,7 +50,7 @@ public class FooterListCommandHandlerTests : IClassFixture<SqliteFixture>
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        var id = footers.Insert("<b>footer</b>");
+        var id = footers.Insert("<i>footer</i>");
 
         var handler = new FooterListCommandHandler();
         var (context, sent, _) = CommandTestContextFactory.Create(
@@ -64,7 +64,7 @@ public class FooterListCommandHandlerTests : IClassFixture<SqliteFixture>
         await handler.HandleAsync(context);
 
         Assert.Single(sent);
-        Assert.Contains(id.ToString(), sent[0]);
         Assert.Contains("<code>", sent[0]);
+        Assert.Contains(id.ToString(), sent[0]);
     }
 }
