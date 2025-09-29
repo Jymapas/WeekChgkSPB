@@ -74,28 +74,46 @@ internal class BotRunner
         }
 
         var context = new BotCommandContext(_bot, message, ct, _announcements, _posts, _footers, _stateStore, _helper);
-        var isCommand = message.Text.StartsWith('/');
 
-        if (isCommand)
-        {
-            foreach (var handler in _handlers)
-            {
-                if (!handler.CanHandle(context))
-                {
-                    continue;
-                }
-
-                await handler.HandleAsync(context);
-                return;
-            }
-        }
-
-        if (message.From is null)
+        if (await HandleCommandAsync(context))
         {
             return;
         }
 
-        if (!_stateStore.TryGet(message.From.Id, out var state) || state is null || state.Step == AddStep.None)
+        await HandleFlowAsync(context);
+    }
+
+    private async Task<bool> HandleCommandAsync(BotCommandContext context)
+    {
+        var text = context.Message.Text;
+        if (text is null || !text.StartsWith('/'))
+        {
+            return false;
+        }
+
+        foreach (var handler in _handlers)
+        {
+            if (!handler.CanHandle(context))
+            {
+                continue;
+            }
+
+            await handler.HandleAsync(context);
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task HandleFlowAsync(BotCommandContext context)
+    {
+        var from = context.Message.From;
+        if (from is null)
+        {
+            return;
+        }
+
+        if (!_stateStore.TryGet(from.Id, out var state) || state is null || state.Step == AddStep.None)
         {
             return;
         }
