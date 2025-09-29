@@ -139,31 +139,21 @@ internal class BotRunner
             throw new ArgumentNullException(nameof(flows));
         }
 
-        var steps = Enum.GetValues<AddStep>();
         var grouped = new Dictionary<AddStep, List<IConversationFlowHandler>>();
 
         foreach (var flow in flows)
         {
-            foreach (var step in steps)
-            {
-                if (step is AddStep.None or AddStep.Done)
-                {
-                    continue;
-                }
-
-                if (!flow.CanHandle(step))
-                {
-                    continue;
-                }
-
-                if (!grouped.TryGetValue(step, out var list))
-                {
-                    list = new List<IConversationFlowHandler>();
-                    grouped[step] = list;
-                }
-
-                list.Add(flow);
-            }
+            AddIfHandles(flow, AddStep.WaitingId, grouped);
+            AddIfHandles(flow, AddStep.WaitingName, grouped);
+            AddIfHandles(flow, AddStep.WaitingPlace, grouped);
+            AddIfHandles(flow, AddStep.WaitingDateTime, grouped);
+            AddIfHandles(flow, AddStep.WaitingCost, grouped);
+            AddIfHandles(flow, AddStep.WaitingLines, grouped);
+            AddIfHandles(flow, AddStep.EditWaitingName, grouped);
+            AddIfHandles(flow, AddStep.EditWaitingPlace, grouped);
+            AddIfHandles(flow, AddStep.EditWaitingDateTime, grouped);
+            AddIfHandles(flow, AddStep.EditWaitingCost, grouped);
+            AddIfHandles(flow, AddStep.FooterWaitingText, grouped);
         }
 
         var result = new Dictionary<AddStep, IReadOnlyList<IConversationFlowHandler>>(grouped.Count);
@@ -173,5 +163,24 @@ internal class BotRunner
         }
 
         return result;
+    }
+
+    private static void AddIfHandles(
+        IConversationFlowHandler flow,
+        AddStep step,
+        IDictionary<AddStep, List<IConversationFlowHandler>> target)
+    {
+        if (!flow.CanHandle(step))
+        {
+            return;
+        }
+
+        if (!target.TryGetValue(step, out var list))
+        {
+            list = new List<IConversationFlowHandler>();
+            target[step] = list;
+        }
+
+        list.Add(flow);
     }
 }
