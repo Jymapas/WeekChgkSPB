@@ -203,4 +203,19 @@ public class BotCommandHelperTests
         Assert.Equal(moscowNow, TimeZoneInfo.ConvertTimeFromUtc(fromUtc, PostFormatter.Moscow).Date);
         Assert.Equal(expectedEnd, TimeZoneInfo.ConvertTimeFromUtc(toUtc, PostFormatter.Moscow));
     }
+
+    [Theory]
+    [InlineData("/cmd", "/cmd", true)]
+    [InlineData("/cmd", "/cmd арг", true)]
+    [InlineData("/cmd", "/cmd@MyBot арг", true)]
+    [InlineData("/cmd", "/cmd@MyBot", true)]
+    [InlineData("/cmd", "/cmdExtra", false)]
+    [InlineData("/cmd", "/c md", false)]
+    [InlineData("/cmd", null, false)]
+    public void IsCommand_HandlesTelegramFormats(string command, string? text, bool expected)
+    {
+        var result = _helper.IsCommand(text, command);
+
+        Assert.Equal(expected, result);
+    }
 }
