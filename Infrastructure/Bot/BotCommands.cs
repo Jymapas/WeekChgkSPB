@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Telegram.Bot.Types;
 
 namespace WeekChgkSPB.Infrastructure.Bot;
@@ -37,8 +39,8 @@ public static class BotCommands
 
     private readonly static Dictionary<string, string> CustomDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        [MakePostLJ] = "Создать пост для LiveJournal",
         [MakePost] = "Создать пост",
+        [MakePostLJ] = "Создать пост для LiveJournal",
         [Add] = "Добавить анонс единым блоком",
         [AddLines] = "Добавить анонс по шагам",
         [Edit] = "Редактировать анонс",
@@ -52,12 +54,16 @@ public static class BotCommands
         [FooterDel] = "Удалить футер",
     };
 
-    public static BotCommand?[] AsBotCommands() =>
-        [.. All.Select(c =>
+    public static IReadOnlyList<BotCommand> AsBotCommands() =>
+        All
+            .Select(c =>
             {
                 var cmd = c.TrimStart('/');
                 if (CustomDescriptions.TryGetValue(c, out var desc) && !string.IsNullOrWhiteSpace(desc))
                     return new BotCommand { Command = cmd, Description = desc };
                 return null;
-            })];
+            })
+            .Where(static c => c is not null)
+            .Select(static c => c!)
+            .ToArray();
 }
