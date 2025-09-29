@@ -153,6 +153,113 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
         Assert.Equal(0, skippedFlow.HandleCallCount);
     }
 
+    [Fact]
+    public async Task HandleUpdate_IgnoresMessagesFromOtherChats()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        var botMock = new Mock<ITelegramBotClient>();
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+
+        var handler = new TestCommandHandler(canHandle: true);
+        var flow = new TrackingFlow(new[] { AddStep.WaitingName });
+
+        var runner = new BotRunner(
+            botMock.Object,
+            allowedChatId: 1,
+            posts,
+            announcements,
+            footers,
+            helper,
+            stateStore,
+            new IBotCommandHandler[] { handler },
+            new IConversationFlowHandler[] { flow });
+
+        var update = CreateUpdate("/test", chatId: 999, userId: 10);
+
+        await runner.HandleUpdate(botMock.Object, update, CancellationToken.None);
+
+        Assert.Equal(0, handler.CanHandleCallCount);
+        Assert.Equal(0, handler.HandleCallCount);
+        Assert.Equal(0, flow.HandleCallCount);
+    }
+
+    [Fact]
+    public async Task HandleUpdate_IgnoresMessageWithoutText()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        var botMock = new Mock<ITelegramBotClient>();
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+
+        var handler = new TestCommandHandler(canHandle: true);
+        var flow = new TrackingFlow(new[] { AddStep.WaitingName });
+
+        var runner = new BotRunner(
+            botMock.Object,
+            allowedChatId: 1,
+            posts,
+            announcements,
+            footers,
+            helper,
+            stateStore,
+            new IBotCommandHandler[] { handler },
+            new IConversationFlowHandler[] { flow });
+
+        var update = CreateUpdate(null, chatId: 1, userId: 10);
+
+        await runner.HandleUpdate(botMock.Object, update, CancellationToken.None);
+
+        Assert.Equal(0, handler.CanHandleCallCount);
+        Assert.Equal(0, handler.HandleCallCount);
+        Assert.Equal(0, flow.HandleCallCount);
+    }
+
+    [Fact]
+    public async Task HandleUpdate_FlowHandlers_ContinuesUntilHandled()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        var botMock = new Mock<ITelegramBotClient>();
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+
+        var handler = new TestCommandHandler(canHandle: false);
+        var firstFlow = new TrackingFlow(new[] { AddStep.WaitingName }) { HandleResult = false };
+        var secondFlow = new TrackingFlow(new[] { AddStep.WaitingName }) { HandleResult = true };
+
+        stateStore.AddOrUpdate(10).Step = AddStep.WaitingName;
+
+        var runner = new BotRunner(
+            botMock.Object,
+            allowedChatId: 1,
+            posts,
+            announcements,
+            footers,
+            helper,
+            stateStore,
+            new IBotCommandHandler[] { handler },
+            new IConversationFlowHandler[] { firstFlow, secondFlow });
+
+        var update = CreateUpdate("ответ", chatId: 1, userId: 10);
+
+        await runner.HandleUpdate(botMock.Object, update, CancellationToken.None);
+
+        Assert.Equal(1, firstFlow.HandleCallCount);
+        Assert.Equal(1, secondFlow.HandleCallCount);
+    }
+
     private static Update CreateUpdate(string text, long chatId, long? userId)
     {
         var payload = new
