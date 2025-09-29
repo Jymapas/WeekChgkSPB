@@ -169,4 +169,43 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.Equal(50, repo.Get(9)!.Cost);
     }
 
+    [Fact]
+    public async Task HandleEdit_NoExistingAnnouncement_NotifiesAndResets()
+    {
+        _fixture.Reset();
+        var repo = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        posts.Insert(new Post { Id = 10, Title = "T", Link = "L", Description = "D" });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 600;
+        const long chatId = 700;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.EditWaitingName;
+        state.Existing = null;
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            "Новое имя",
+            chatId,
+            userId,
+            repo,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new EditAnnouncementFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.Equal(AddStep.None, state.Step);
+        Assert.False(stateStore.TryGet(userId, out _));
+    }
+
 }
