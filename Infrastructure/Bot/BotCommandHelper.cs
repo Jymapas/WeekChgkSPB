@@ -101,18 +101,13 @@ internal class BotCommandHelper
                 return true;
             }
 
-            if (DateTime.TryParseExact(single, MoscowDateTimeFormats,
-                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var localSingle))
+            if (TryParseLocal(single, MoscowDateTimeFormats, CultureInfo.InvariantCulture, out utc))
             {
-                var unspecifiedLocal = DateTime.SpecifyKind(localSingle, DateTimeKind.Unspecified);
-                utc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedLocal, _moscow);
                 return true;
             }
 
-            if (DateTime.TryParse(single, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var ruLocal))
+            if (TryParseLocal(single, RuCulture, DateTimeStyles.AllowWhiteSpaces, out utc))
             {
-                var unspecifiedLocal = DateTime.SpecifyKind(ruLocal, DateTimeKind.Unspecified);
-                utc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedLocal, _moscow);
                 return true;
             }
         }
@@ -124,18 +119,13 @@ internal class BotCommandHelper
             return true;
         }
 
-        if (DateTime.TryParseExact(normalized, MoscowDateTimeFormats,
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+        if (TryParseLocal(normalized, MoscowDateTimeFormats, CultureInfo.InvariantCulture, out utc))
         {
-            var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
-            utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, _moscow);
             return true;
         }
 
-        if (DateTime.TryParse(normalized, RuCulture, DateTimeStyles.AllowWhiteSpaces, out var ruLocalFallback))
+        if (TryParseLocal(normalized, RuCulture, DateTimeStyles.AllowWhiteSpaces, out utc))
         {
-            var unspecified = DateTime.SpecifyKind(ruLocalFallback, DateTimeKind.Unspecified);
-            utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, _moscow);
             return true;
         }
 
@@ -244,9 +234,7 @@ internal class BotCommandHelper
             return false;
         }
 
-        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
-        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, _moscow);
-        return true;
+        return TryConvertLocalToUtc(local, out utc);
     }
 
     private bool TryParseSingleLineHumanDateTime(string single, out DateTime utc)
@@ -267,9 +255,7 @@ internal class BotCommandHelper
             return false;
         }
 
-        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
-        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, _moscow);
-        return true;
+        return TryConvertLocalToUtc(local, out utc);
     }
 
     private bool TryBuildLocalFromHuman(string datePart, string timePart, out DateTime local)
@@ -304,5 +290,42 @@ internal class BotCommandHelper
     private static bool ContainsYear(string datePart)
     {
         return YearRegex.IsMatch(datePart);
+    }
+
+    private bool TryParseLocal(
+        string input,
+        string[] formats,
+        IFormatProvider provider,
+        out DateTime utc)
+    {
+        if (DateTime.TryParseExact(input, formats, provider, DateTimeStyles.None, out var parsed))
+        {
+            return TryConvertLocalToUtc(parsed, out utc);
+        }
+
+        utc = default;
+        return false;
+    }
+
+    private bool TryParseLocal(
+        string input,
+        IFormatProvider provider,
+        DateTimeStyles styles,
+        out DateTime utc)
+    {
+        if (DateTime.TryParse(input, provider, styles, out var parsed))
+        {
+            return TryConvertLocalToUtc(parsed, out utc);
+        }
+
+        utc = default;
+        return false;
+    }
+
+    private bool TryConvertLocalToUtc(DateTime local, out DateTime utc)
+    {
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, _moscow);
+        return true;
     }
 }
