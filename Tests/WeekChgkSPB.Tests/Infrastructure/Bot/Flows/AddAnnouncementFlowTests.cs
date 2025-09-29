@@ -224,6 +224,112 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
+    public async Task HandleWaitingLines_PostMissing_KeepsState()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 400;
+        const long chatId = 1100;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var botClient = TelegramBotClientStub.Create();
+        var payload = string.Join('\n', new[]
+        {
+            "100",
+            "Турнир",
+            "Место",
+            "2025-08-10T19:30",
+            "150"
+        });
+
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            payload,
+            chatId,
+            userId,
+            announcements,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new AddAnnouncementFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.False(announcements.Exists(100));
+        Assert.Equal(AddStep.WaitingLines, state.Step);
+        Assert.True(stateStore.TryGet(userId, out var stored));
+        Assert.Same(state, stored);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_DuplicateAnnouncement_ReportsAndKeepsState()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        posts.Insert(new Post { Id = 101, Title = "Title", Link = "link", Description = "desc" });
+        announcements.Insert(new Announcement
+        {
+            Id = 101,
+            TournamentName = "Existing",
+            Place = "Place",
+            DateTimeUtc = new DateTime(2025, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+            Cost = 100
+        });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 401;
+        const long chatId = 1101;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var botClient = TelegramBotClientStub.Create();
+        var payload = string.Join('\n', new[]
+        {
+            "101",
+            "Новый",
+            "Место",
+            "2025-08-10T19:30",
+            "200"
+        });
+
+        var context = FlowTestContextFactory.CreateContext(
+            botClient,
+            payload,
+            chatId,
+            userId,
+            announcements,
+            posts,
+            footers,
+            stateStore,
+            helper);
+
+        var flow = new AddAnnouncementFlow();
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.Equal(AddStep.WaitingLines, state.Step);
+        Assert.True(stateStore.TryGet(userId, out var stored));
+        Assert.Same(state, stored);
+        var storedAnnouncement = announcements.Get(101);
+        Assert.NotNull(storedAnnouncement);
+        Assert.Equal("Existing", storedAnnouncement!.TournamentName);
+    }
+
+    [Fact]
     public async Task HandleWaitingDateTime_InvalidFormat_DoesNotAdvance()
     {
         _fixture.Reset();
