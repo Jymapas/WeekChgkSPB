@@ -1,4 +1,4 @@
-﻿namespace WeekChgkSPB;
+namespace WeekChgkSPB;
 
 public class Post
 {
