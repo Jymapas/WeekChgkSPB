@@ -31,12 +31,66 @@ internal class Program
             return;
         }
 
+        string? channelId = null;
+        ChannelPostScheduleOptions? scheduleOptions = null;
+        var channelIdVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_ID");
+        if (!string.IsNullOrWhiteSpace(channelIdVar))
+        {
+            var trimmedChannelId = channelIdVar.Trim();
+            var perWeekVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POSTS_PER_WEEK") ?? "2";
+            var daysVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POST_DAYS") ?? "Monday,Thursday";
+            var timeVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POST_TIME") ?? "12:00";
+            var lookaheadVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_LOOKAHEAD_DAYS");
+            var triggerWindowVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_TRIGGER_WINDOW_MINUTES");
+
+            ChannelPostScheduleOptions? parsedOptions = null;
+            try
+            {
+                parsedOptions = ChannelPostScheduleOptions.FromStrings(
+                    perWeekVar,
+                    daysVar,
+                    timeVar,
+                    lookaheadVar,
+                    triggerWindowVar);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Telegram channel scheduler disabled: {ex.Message}");
+            }
+
+            if (parsedOptions is null)
+            {
+                // already logged reason inside catch
+            }
+            else if (long.TryParse(trimmedChannelId, out var parsedChannelId))
+            {
+                scheduleOptions = parsedOptions;
+                channelId = trimmedChannelId;
+                Console.WriteLine($"Telegram channel scheduler configured for chat {parsedChannelId}.");
+            }
+            else if (trimmedChannelId.StartsWith('@'))
+            {
+                scheduleOptions = parsedOptions;
+                channelId = trimmedChannelId;
+                Console.WriteLine($"Telegram channel scheduler configured for channel {trimmedChannelId}.");
+            }
+            else
+            {
+                Console.WriteLine("Telegram channel scheduler disabled: TELEGRAM_CHANNEL_ID is invalid.");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Telegram channel scheduler disabled: TELEGRAM_CHANNEL_ID not set.");
+        }
+
         using var host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
             {
                 services.AddSingleton(new PostsRepository(dbPath));
                 services.AddSingleton(new FootersRepository(dbPath));
                 services.AddSingleton(new AnnouncementsRepository(dbPath));
+                services.AddSingleton(new ChannelPostsRepository(dbPath));
                 services.AddSingleton(new RssFetcher(RssUrl));
                 services.AddSingleton<INotifier>(_ => new TelegramNotifier(token, chatId));
                 services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
@@ -68,6 +122,21 @@ internal class Program
                     sp.GetRequiredService<BotConversationState>(),
                     sp.GetServices<IBotCommandHandler>(),
                     sp.GetServices<IConversationFlowHandler>()));
+
+                if (!string.IsNullOrEmpty(channelId) && scheduleOptions is not null)
+                {
+                    var options = scheduleOptions;
+                    var resolvedChannelId = channelId;
+                    services.AddSingleton(options);
+                    services.AddSingleton(sp => new ScheduledPostPublisher(
+                        sp.GetRequiredService<AnnouncementsRepository>(),
+                        sp.GetRequiredService<FootersRepository>(),
+                        sp.GetRequiredService<ChannelPostsRepository>(),
+                        sp.GetRequiredService<ITelegramBotClient>(),
+                        resolvedChannelId,
+                        options,
+                        TimeZoneInfo.Local));
+                }
             })
             .Build();
 
@@ -79,6 +148,7 @@ internal class Program
         var notifier = services.GetRequiredService<INotifier>();
         var botRunner = services.GetRequiredService<BotRunner>();
         var botClient = services.GetRequiredService<ITelegramBotClient>();
+        var scheduler = services.GetService<ScheduledPostPublisher>();
 
         Console.WriteLine("Telegram notifier enabled");
 
@@ -100,12 +170,29 @@ internal class Program
         botRunner.Start(cts.Token);
 
         await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+        var lastRssCheck = DateTime.UtcNow;
 
-        var timer = new PeriodicTimer(TimeSpan.FromHours(1));
+        if (scheduler is not null)
+        {
+            await scheduler.TryPublishAsync(DateTime.UtcNow, cts.Token);
+        }
+
+        var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         try
         {
             while (await timer.WaitForNextTickAsync(cts.Token))
-                await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+            {
+                if (DateTime.UtcNow - lastRssCheck >= TimeSpan.FromHours(1))
+                {
+                    await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+                    lastRssCheck = DateTime.UtcNow;
+                }
+
+                if (scheduler is not null)
+                {
+                    await scheduler.TryPublishAsync(DateTime.UtcNow, cts.Token);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
