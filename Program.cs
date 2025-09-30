@@ -110,6 +110,20 @@ internal class Program
                 services.AddSingleton<IBotCommandHandler, FooterListCommandHandler>();
                 services.AddSingleton<IBotCommandHandler, FooterDeleteCommandHandler>();
                 services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(token));
+                services.AddSingleton<IChannelPostUpdater>(sp =>
+                {
+                    if (string.IsNullOrEmpty(channelId))
+                    {
+                        return new NoOpChannelPostUpdater();
+                    }
+
+                    return new ChannelPostUpdater(
+                        sp.GetRequiredService<AnnouncementsRepository>(),
+                        sp.GetRequiredService<FootersRepository>(),
+                        sp.GetRequiredService<ChannelPostsRepository>(),
+                        sp.GetRequiredService<ITelegramBotClient>(),
+                        channelId);
+                });
                 services.AddSingleton(sp => new BotRunner(
                     sp.GetRequiredService<ITelegramBotClient>(),
                     chatId,
