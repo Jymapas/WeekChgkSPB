@@ -36,7 +36,7 @@ internal sealed class ChannelPostUpdater : IChannelPostUpdater
             return;
         }
 
-        var fromUtc = ResolveFromUtc(DateTime.UtcNow);
+        var fromUtc = ResolveFromScheduledUtc(entry.ScheduledAtUtc);
         var rows = _announcements.GetWithLinksInRange(fromUtc);
         if (rows.Count == 0)
         {
@@ -62,10 +62,10 @@ internal sealed class ChannelPostUpdater : IChannelPostUpdater
         }
     }
 
-    private static DateTime ResolveFromUtc(DateTime utcNow)
+    private static DateTime ResolveFromScheduledUtc(DateTime scheduledUtc)
     {
-        var nowMoscow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, PostFormatter.Moscow);
-        var startLocal = nowMoscow.Date;
+        var local = TimeZoneInfo.ConvertTimeFromUtc(scheduledUtc, PostFormatter.Moscow);
+        var startLocal = local.Date;
         return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(startLocal, DateTimeKind.Unspecified), PostFormatter.Moscow);
     }
 }
