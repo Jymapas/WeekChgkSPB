@@ -40,7 +40,6 @@ internal class Program
             var perWeekVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POSTS_PER_WEEK") ?? "2";
             var daysVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POST_DAYS") ?? "Monday,Thursday";
             var timeVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POST_TIME") ?? "12:00";
-            var lookaheadVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_LOOKAHEAD_DAYS");
             var triggerWindowVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_TRIGGER_WINDOW_MINUTES");
 
             ChannelPostScheduleOptions? parsedOptions = null;
@@ -50,7 +49,6 @@ internal class Program
                     perWeekVar,
                     daysVar,
                     timeVar,
-                    lookaheadVar,
                     triggerWindowVar);
             }
             catch (Exception ex)

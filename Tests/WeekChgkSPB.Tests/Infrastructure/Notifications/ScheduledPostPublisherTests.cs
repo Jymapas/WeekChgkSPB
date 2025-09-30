@@ -56,8 +56,7 @@ public class ScheduledPostPublisherTests : IClassFixture<SqliteFixture>
         var options = new ChannelPostScheduleOptions(
             postsPerWeek: 2,
             days: new[] { DayOfWeek.Monday, DayOfWeek.Thursday },
-            timeOfDay: new TimeSpan(12, 0, 0),
-            lookaheadDays: 14);
+            timeOfDay: new TimeSpan(12, 0, 0));
         var tz = TimeZoneInfo.CreateCustomTimeZone("UTC+5", TimeSpan.FromHours(5), "UTC+5", "UTC+5");
         var publisher = new ScheduledPostPublisher(
             announcements,
@@ -98,8 +97,7 @@ public class ScheduledPostPublisherTests : IClassFixture<SqliteFixture>
         var options = new ChannelPostScheduleOptions(
             postsPerWeek: 1,
             days: new[] { DayOfWeek.Monday },
-            timeOfDay: new TimeSpan(12, 0, 0),
-            lookaheadDays: 14);
+            timeOfDay: new TimeSpan(12, 0, 0));
         var tz = TimeZoneInfo.CreateCustomTimeZone("UTC+5", TimeSpan.FromHours(5), "UTC+5", "UTC+5");
         var publisher = new ScheduledPostPublisher(
             announcements,

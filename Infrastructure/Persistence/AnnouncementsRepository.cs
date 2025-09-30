@@ -106,20 +106,24 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
     }
 
-    public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime toUtc)
+    public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime? toUtc = null)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
 
         using var cmd = connection.CreateCommand();
+        var toClause = toUtc is null ? string.Empty : " AND a.dateTimeUtc <= @to";
         cmd.CommandText =
-            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, p.link
+            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, p.link
           FROM announcements AS a
           JOIN posts AS p ON p.id = a.id
-          WHERE a.dateTimeUtc >= @from AND a.dateTimeUtc <= @to
+          WHERE a.dateTimeUtc >= @from{toClause}
           ORDER BY a.dateTimeUtc, a.id;";
         cmd.Parameters.AddWithValue("@from", fromUtc.ToString("O"));
-        cmd.Parameters.AddWithValue("@to", toUtc.ToString("O"));
+        if (toUtc is not null)
+        {
+            cmd.Parameters.AddWithValue("@to", toUtc.Value.ToString("O"));
+        }
 
         var list = new List<AnnouncementRow>();
         using var r = cmd.ExecuteReader();

@@ -11,14 +11,12 @@ public sealed class ChannelPostScheduleOptions
     public int PostsPerWeek { get; }
     public IReadOnlyList<DayOfWeek> Days { get; }
     public TimeSpan TimeOfDay { get; }
-    public int LookaheadDays { get; }
     public TimeSpan TriggerWindow { get; }
 
     public ChannelPostScheduleOptions(
         int postsPerWeek,
         IReadOnlyList<DayOfWeek> days,
         TimeSpan timeOfDay,
-        int lookaheadDays = 14,
         TimeSpan? triggerWindow = null)
     {
         if (postsPerWeek <= 0)
@@ -27,8 +25,6 @@ public sealed class ChannelPostScheduleOptions
             throw new ArgumentException("At least one day must be provided.", nameof(days));
         if (days.Count != postsPerWeek)
             throw new ArgumentException("Number of days must match posts per week.", nameof(days));
-        if (lookaheadDays <= 0)
-            throw new ArgumentOutOfRangeException(nameof(lookaheadDays), "Lookahead days must be positive.");
 
         var distinctDays = days.Distinct().OrderBy(d => d).ToArray();
         if (distinctDays.Length != days.Count)
@@ -37,7 +33,6 @@ public sealed class ChannelPostScheduleOptions
         PostsPerWeek = postsPerWeek;
         Days = distinctDays;
         TimeOfDay = timeOfDay;
-        LookaheadDays = lookaheadDays;
         TriggerWindow = triggerWindow ?? DefaultTriggerWindow;
     }
 
@@ -45,7 +40,6 @@ public sealed class ChannelPostScheduleOptions
         string? postsPerWeek,
         string? days,
         string? timeOfDay,
-        string? lookaheadDays = null,
         string? triggerWindowMinutes = null)
     {
         if (string.IsNullOrWhiteSpace(postsPerWeek))
@@ -83,15 +77,6 @@ public sealed class ChannelPostScheduleOptions
 
         var parsedTime = TimeSpan.Parse(timeOfDay, CultureInfo.InvariantCulture);
 
-        int parsedLookahead = 14;
-        if (!string.IsNullOrWhiteSpace(lookaheadDays))
-        {
-            if (!int.TryParse(lookaheadDays, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedLookahead) || parsedLookahead <= 0)
-            {
-                throw new FormatException("Lookahead days must be a positive integer when provided.");
-            }
-        }
-
         TimeSpan? triggerWindow = null;
         if (!string.IsNullOrWhiteSpace(triggerWindowMinutes))
         {
@@ -100,6 +85,6 @@ public sealed class ChannelPostScheduleOptions
             triggerWindow = TimeSpan.FromMinutes(minutes);
         }
 
-        return new ChannelPostScheduleOptions(perWeek, orderedDays, parsedTime, parsedLookahead, triggerWindow);
+        return new ChannelPostScheduleOptions(perWeek, orderedDays, parsedTime, triggerWindow);
     }
 }

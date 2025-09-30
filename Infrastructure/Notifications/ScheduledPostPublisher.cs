@@ -43,7 +43,9 @@ public class ScheduledPostPublisher
         }
 
         var (fromUtc, toUtc) = ResolveRangeUtc(utcNow);
-        var rows = _announcements.GetWithLinksInRange(fromUtc, toUtc);
+        var rows = toUtc is null
+            ? _announcements.GetWithLinksInRange(fromUtc)
+            : _announcements.GetWithLinksInRange(fromUtc, toUtc.Value);
         if (rows.Count == 0)
         {
             return;
@@ -97,13 +99,11 @@ public class ScheduledPostPublisher
         return due;
     }
 
-    private (DateTime FromUtc, DateTime ToUtc) ResolveRangeUtc(DateTime utcNow)
+    private (DateTime FromUtc, DateTime? ToUtc) ResolveRangeUtc(DateTime utcNow)
     {
         var nowMoscow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, PostFormatter.Moscow);
         var startLocal = nowMoscow.Date;
-        var endLocal = startLocal.AddDays(_options.LookaheadDays).AddHours(23).AddMinutes(59);
         var fromUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(startLocal, DateTimeKind.Unspecified), PostFormatter.Moscow);
-        var toUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified), PostFormatter.Moscow);
-        return (fromUtc, toUtc);
+        return (fromUtc, null);
     }
 }
