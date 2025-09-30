@@ -61,14 +61,14 @@ public class ScheduledPostPublisher
                 continue;
             }
 
-            await _bot.SendMessage(
+            var sentMessage = await _bot.SendMessage(
                 _channelId,
                 text,
                 ParseMode.Html,
                 linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
                 cancellationToken: ct);
 
-            _history.MarkPosted(slotUtc, DateTime.UtcNow);
+            _history.MarkPosted(slotUtc, DateTime.UtcNow, sentMessage.MessageId);
         }
     }
 

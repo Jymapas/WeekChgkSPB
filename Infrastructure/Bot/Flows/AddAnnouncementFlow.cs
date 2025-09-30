@@ -1,10 +1,18 @@
 using System.Threading.Tasks;
 using Telegram.Bot;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Flows;
 
 internal class AddAnnouncementFlow : IConversationFlowHandler
 {
+    private readonly IChannelPostUpdater _channelPostUpdater;
+
+    public AddAnnouncementFlow(IChannelPostUpdater channelPostUpdater)
+    {
+        _channelPostUpdater = channelPostUpdater;
+    }
+
     public bool CanHandle(AddStep step)
     {
         return step is AddStep.WaitingId
@@ -29,7 +37,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         };
     }
 
-    private static async Task<bool> HandleWaitingId(BotCommandContext context, AddAnnouncementState state)
+    private async Task<bool> HandleWaitingId(BotCommandContext context, AddAnnouncementState state)
     {
         var msg = context.Message;
         if (!long.TryParse(msg.Text, out var id))
@@ -57,7 +65,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         return true;
     }
 
-    private static async Task<bool> HandleWaitingName(BotCommandContext context, AddAnnouncementState state)
+    private async Task<bool> HandleWaitingName(BotCommandContext context, AddAnnouncementState state)
     {
         var msg = context.Message;
         if (string.IsNullOrWhiteSpace(msg.Text))
@@ -72,7 +80,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         return true;
     }
 
-    private static async Task<bool> HandleWaitingPlace(BotCommandContext context, AddAnnouncementState state)
+    private async Task<bool> HandleWaitingPlace(BotCommandContext context, AddAnnouncementState state)
     {
         state.Draft.Place = context.Message.Text?.Trim() ?? string.Empty;
         state.Step = AddStep.WaitingDateTime;
@@ -83,7 +91,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         return true;
     }
 
-    private static async Task<bool> HandleWaitingDateTime(BotCommandContext context, AddAnnouncementState state)
+    private async Task<bool> HandleWaitingDateTime(BotCommandContext context, AddAnnouncementState state)
     {
         if (!context.Helper.TryParseDateTime(context.Message.Text, out var utcValue))
         {
@@ -99,7 +107,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         return true;
     }
 
-    private static async Task<bool> HandleWaitingCost(BotCommandContext context, AddAnnouncementState state)
+    private async Task<bool> HandleWaitingCost(BotCommandContext context, AddAnnouncementState state)
     {
         if (!int.TryParse(context.Message.Text, out var cost))
         {
@@ -109,6 +117,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
 
         state.Draft.Cost = cost;
         context.Announcements.Insert(state.Draft);
+        await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
 
         state.Step = AddStep.Done;
         await context.Bot.SendMessage(context.Message.Chat.Id, "Сохранено", cancellationToken: context.CancellationToken);
@@ -117,7 +126,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         return true;
     }
 
-    private static async Task<bool> HandleWaitingLines(BotCommandContext context, AddAnnouncementState state)
+    private async Task<bool> HandleWaitingLines(BotCommandContext context, AddAnnouncementState state)
     {
         var content = context.Message.Text ?? string.Empty;
         if (!context.Helper.TryBuildAnnouncementFromLines(content, out var announcement, out var error))
@@ -140,6 +149,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         }
 
         context.Announcements.Insert(announcement);
+        await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
         await context.Bot.SendMessage(context.Message.Chat.Id, "Сохранено", cancellationToken: context.CancellationToken);
         context.StateStore.Remove(context.Message.From!.Id);
         state.Existing = null;
