@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.IO;
 using Microsoft.Data.Sqlite;
 
 namespace WeekChgkSPB;
@@ -15,6 +16,9 @@ public class AnnouncementsRepository
 
     private void EnsureCreated()
     {
+        var dir = Path.GetDirectoryName(_dbPath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         var cmd = connection.CreateCommand();
