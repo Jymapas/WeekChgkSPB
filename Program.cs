@@ -3,7 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Runtime.InteropServices;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
@@ -49,6 +51,22 @@ internal class Program
 
         var me = await botClient.GetMe(cts.Token);
         Console.WriteLine(me.Username);
+
+        if (settings.HasChannel)
+        {
+            var hasAccess = await EnsureChannelAccessAsync(
+                botClient,
+                settings.ChannelId!,
+                me.Id,
+                cts.Token);
+
+            if (!hasAccess)
+            {
+                Console.WriteLine("Channel access validation failed.");
+                await host.StopAsync();
+                return;
+            }
+        }
 
         var commands = BotCommands.AsBotCommands();
         await botClient.SetMyCommands(
@@ -201,6 +219,45 @@ internal class Program
         var trimmed = envPath.TrimStart('/', '\\');
         return Path.Combine(baseDir, trimmed);
 
+    }
+
+    private static async Task<bool> EnsureChannelAccessAsync(
+        ITelegramBotClient botClient,
+        string channelId,
+        long botUserId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var chatId = BuildChatId(channelId);
+            _ = await botClient.GetChat(chatId, cancellationToken: ct);
+
+            var member = await botClient.GetChatMember(chatId, botUserId, cancellationToken: ct);
+            if (member.Status is ChatMemberStatus.Administrator or ChatMemberStatus.Creator)
+            {
+                return true;
+            }
+
+            Console.WriteLine($"Bot lacks administrator rights in channel {channelId}. Current status: {member.Status}.");
+            return false;
+        }
+        catch (ApiRequestException ex)
+        {
+            Console.WriteLine($"Channel access check failed for {channelId}: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error while checking channel access: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static ChatId BuildChatId(string value)
+    {
+        return long.TryParse(value, out var numeric)
+            ? new ChatId(numeric)
+            : new ChatId(value);
     }
 
 }
