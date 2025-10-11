@@ -13,8 +13,11 @@ public static class PostFormatter
         TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
 #endif
 
-    public static string BuildScheduleMessage(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines = null) =>
-        BuildSchedule(rows, footerLines, "Продолжаем вести список синхронов в Санкт-Петербурге.");
+    public static string BuildScheduleMessage(
+        IEnumerable<AnnouncementRow> rows,
+        IEnumerable<string>? footerLines = null,
+        DateTime? updatedAtLocal = null) =>
+        BuildSchedule(rows, footerLines, "Продолжаем вести список синхронов в Санкт-Петербурге.", updatedAtLocal);
 
     public static string BuildScheduleHtml(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines = null) =>
         BuildSchedule(rows, footerLines, "Копия поста выкладывается в <a href=\"https://t.me/WeekChgkSPB\" rel=\"nofollow\">Телеграм-канал</a>.");
@@ -32,7 +35,11 @@ public static class PostFormatter
         return "<code>" + escaped[..Math.Min(budget, escaped.Length)] + "…</code>";
     }
 
-    private static string BuildSchedule(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines, string headerLine)
+    private static string BuildSchedule(
+        IEnumerable<AnnouncementRow> rows,
+        IEnumerable<string>? footerLines,
+        string headerLine,
+        DateTime? updatedAtLocal = null)
     {
         var byDate = rows
             .Select(r => (r, local: TimeZoneInfo.ConvertTimeFromUtc(r.DateTimeUtc, Moscow)))
@@ -42,6 +49,12 @@ public static class PostFormatter
         var sb = new StringBuilder();
 
         sb.AppendLine(headerLine);
+        if (updatedAtLocal is not null)
+        {
+            sb.Append("Пост обновлён ")
+                .Append(updatedAtLocal.Value.ToString("dd.MM.yyyy", Ru))
+                .AppendLine();
+        }
         sb.AppendLine();
 
         foreach (var g in byDate)

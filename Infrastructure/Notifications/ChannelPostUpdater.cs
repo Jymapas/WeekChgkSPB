@@ -44,7 +44,8 @@ internal sealed class ChannelPostUpdater : IChannelPostUpdater
         }
 
         var footerLines = _footers.GetAllTextsDesc();
-        var text = PostFormatter.BuildScheduleMessage(rows, footerLines.Count > 0 ? footerLines : null);
+        var updatedAtLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PostFormatter.Moscow);
+        var text = PostFormatter.BuildScheduleMessage(rows, footerLines.Count > 0 ? footerLines : null, updatedAtLocal);
 
         try
         {
