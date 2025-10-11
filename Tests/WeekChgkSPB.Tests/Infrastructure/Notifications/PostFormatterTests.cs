@@ -32,6 +32,25 @@ public class PostFormatterTests
     }
 
     [Fact]
+    public void BuildScheduleHtml_UsesLiveJournalHeader()
+    {
+        var result = PostFormatter.BuildScheduleHtml(SampleRows);
+
+        const string expected = """
+Копия поста выкладывается в <a href="https://t.me/WeekChgkSPB" rel="nofollow">Телеграм-канал</a>.
+
+<b>10 января (пт)</b>
+<a href="https://example.com/1">First - Club1 (18:00) 100 р.</a>
+<a href="https://example.com/2">Second - Club2 (20:30) 200 р.</a>
+
+<b>11 января (сб)</b>
+<a href="https://example.com/3">Third - Club3 (15:00) 150 р.</a>
+""";
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
     public void BuildScheduleMessage_IncludesFooters()
     {
         var footers = new[] { "<i>Footer1</i>", "Footer2" };
