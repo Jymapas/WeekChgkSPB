@@ -11,27 +11,37 @@ public class ScheduledPostPublisher
     private readonly AnnouncementsRepository _announcements;
     private readonly FootersRepository _footers;
     private readonly ChannelPostsRepository _history;
+    private readonly PostsRepository _posts;
     private readonly ITelegramBotClient _bot;
     private readonly string _channelId;
     private readonly ChannelPostScheduleOptions _options;
     private readonly TimeZoneInfo _scheduleZone;
+    private readonly int _announcementRetentionDays;
 
     public ScheduledPostPublisher(
         AnnouncementsRepository announcements,
         FootersRepository footers,
         ChannelPostsRepository history,
+        PostsRepository posts,
         ITelegramBotClient bot,
         string channelId,
         ChannelPostScheduleOptions options,
-        TimeZoneInfo scheduleZone)
+        TimeZoneInfo scheduleZone,
+        int announcementRetentionDays)
     {
         _announcements = announcements;
         _footers = footers;
         _history = history;
+        _posts = posts;
         _bot = bot;
         _channelId = channelId ?? throw new ArgumentNullException(nameof(channelId));
         _options = options;
         _scheduleZone = scheduleZone;
+        if (announcementRetentionDays <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(announcementRetentionDays), "Retention must be positive.");
+        }
+        _announcementRetentionDays = announcementRetentionDays;
     }
 
     public async Task TryPublishAsync(DateTime utcNow, CancellationToken ct)
@@ -54,6 +64,7 @@ public class ScheduledPostPublisher
         var footerLines = _footers.GetAllTextsDesc();
         var text = PostFormatter.BuildScheduleMessage(rows, footerLines.Count > 0 ? footerLines : null);
 
+        var postedAny = false;
         foreach (var slotUtc in dueSlots)
         {
             if (_history.HasPosted(slotUtc))
@@ -69,6 +80,12 @@ public class ScheduledPostPublisher
                 cancellationToken: ct);
 
             _history.MarkPosted(slotUtc, DateTime.UtcNow, sentMessage.MessageId);
+            postedAny = true;
+        }
+
+        if (postedAny)
+        {
+            CleanupStaleData(utcNow);
         }
     }
 
@@ -97,6 +114,13 @@ public class ScheduledPostPublisher
 
         due.Sort();
         return due;
+    }
+
+    private void CleanupStaleData(DateTime utcNow)
+    {
+        var thresholdUtc = utcNow.AddDays(-_announcementRetentionDays);
+        _announcements.DeleteOlderThan(thresholdUtc);
+        _posts.DeleteWithoutAnnouncements();
     }
 
     private (DateTime FromUtc, DateTime? ToUtc) ResolveRangeUtc(DateTime utcNow)

@@ -75,10 +75,12 @@ internal static class ServiceCollectionExtensions
                 sp.GetRequiredService<AnnouncementsRepository>(),
                 sp.GetRequiredService<FootersRepository>(),
                 sp.GetRequiredService<ChannelPostsRepository>(),
+                sp.GetRequiredService<PostsRepository>(),
                 sp.GetRequiredService<ITelegramBotClient>(),
                 channelId,
                 options,
-                TimeZoneInfo.Local));
+                TimeZoneInfo.Local,
+                settings.AnnouncementRetentionDays));
         }
 
         return services;
