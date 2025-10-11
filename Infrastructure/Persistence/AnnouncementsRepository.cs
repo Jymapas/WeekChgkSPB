@@ -106,6 +106,16 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
     }
 
+    public int DeleteOlderThan(DateTime thresholdUtc)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"DELETE FROM announcements WHERE dateTimeUtc < @threshold";
+        cmd.Parameters.AddWithValue("@threshold", thresholdUtc.ToUniversalTime().ToString("O"));
+        return cmd.ExecuteNonQuery();
+    }
+
     public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime? toUtc = null)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");

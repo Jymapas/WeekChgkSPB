@@ -9,6 +9,7 @@ TELEGRAM_CHANNEL_POSTS_PER_WEEK=2
 TELEGRAM_CHANNEL_POST_DAYS=Monday,Thursday
 TELEGRAM_CHANNEL_POST_TIME=12:00
 TELEGRAM_CHANNEL_TRIGGER_WINDOW_MINUTES=180
+ANNOUNCEMENT_RETENTION_DAYS=7
 DB_PATH=/data/posts.db
 ```
 
@@ -16,3 +17,4 @@ DB_PATH=/data/posts.db
 - `TELEGRAM_CHANNEL_POST_DAYS` — comma-separated list of days of week for publishing (case-insensitive).
 - `TELEGRAM_CHANNEL_POST_TIME` — local server time (HH:mm) when the post should be published.
 - `TELEGRAM_CHANNEL_TRIGGER_WINDOW_MINUTES` — optional grace period to catch up missed publishes (default 180 minutes).
+- `ANNOUNCEMENT_RETENTION_DAYS` — how many days to keep announcements before automated cleanup (default 7).

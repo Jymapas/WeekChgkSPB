@@ -54,4 +54,18 @@ public class PostsRepository
         cmd.Parameters.AddWithValue("@description", post.Description);
         cmd.ExecuteNonQuery();
     }
+
+    public int DeleteWithoutAnnouncements()
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            @"DELETE FROM posts
+              WHERE NOT EXISTS (
+                  SELECT 1 FROM announcements AS a
+                  WHERE a.id = posts.id
+              )";
+        return cmd.ExecuteNonQuery();
+    }
 }
