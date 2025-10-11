@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -47,7 +49,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -83,7 +86,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -119,7 +123,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -165,7 +170,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -213,7 +219,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -221,6 +228,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.Null(state.Existing);
         Assert.True(announcements.Exists(7));
         Assert.False(stateStore.TryGet(userId, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -259,7 +267,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -268,6 +277,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.Equal(AddStep.WaitingLines, state.Step);
         Assert.True(stateStore.TryGet(userId, out var stored));
         Assert.Same(state, stored);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
     }
 
     [Fact]
@@ -316,7 +326,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -327,6 +338,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var storedAnnouncement = announcements.Get(101);
         Assert.NotNull(storedAnnouncement);
         Assert.Equal("Existing", storedAnnouncement!.TournamentName);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
     }
 
     [Fact]
@@ -358,7 +370,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -366,6 +379,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.Equal(AddStep.WaitingDateTime, state.Step);
         Assert.True(stateStore.TryGet(userId, out var storedState));
         Assert.Same(state, storedState);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
     }
 
     [Fact]
@@ -397,13 +411,15 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
         Assert.True(handled);
         Assert.Equal(AddStep.WaitingCost, state.Step);
         Assert.NotEqual(default, state.Draft.DateTimeUtc);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
     }
 
     [Fact]
@@ -435,7 +451,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -444,6 +461,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.False(announcements.Exists(11));
         Assert.True(stateStore.TryGet(userId, out var storedState));
         Assert.Same(state, storedState);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
     }
 
     [Fact]
@@ -476,7 +494,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -485,6 +504,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.False(announcements.Exists(12));
         Assert.True(stateStore.TryGet(userId, out var storedState));
         Assert.Same(state, storedState);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
     }
 
     [Fact]
@@ -520,7 +540,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             stateStore,
             helper);
 
-        var flow = new AddAnnouncementFlow();
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
 
         var handled = await flow.HandleAsync(context, state);
 
@@ -528,6 +549,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.True(announcements.Exists(15));
         Assert.Equal(AddStep.Done, state.Step);
         Assert.False(stateStore.TryGet(userId, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
 }

@@ -3,12 +3,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Runtime.InteropServices;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Bot.Flows;
 using WeekChgkSPB.Infrastructure.Notifications;
+using WeekChgkSPB.Infrastructure.Configuration;
 
 internal class Program
 {
@@ -18,57 +21,13 @@ internal class Program
     {
         Env.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
 
-        var dbPath = ResolveDbPath(
-            Environment.GetEnvironmentVariable("DB_PATH"),
-            AppContext.BaseDirectory);
-        Console.WriteLine($"DB_PATH resolved to: {dbPath}");
-
-        var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
-        var chatIdVar = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID");
-        if (string.IsNullOrWhiteSpace(token) || !long.TryParse(chatIdVar, out var chatId))
+        if (!TryLoadSettings(out var settings))
         {
-            Console.WriteLine("Telegram notifier disabled: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID");
             return;
         }
 
         using var host = Host.CreateDefaultBuilder()
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton(new PostsRepository(dbPath));
-                services.AddSingleton(new FootersRepository(dbPath));
-                services.AddSingleton(new AnnouncementsRepository(dbPath));
-                services.AddSingleton(new RssFetcher(RssUrl));
-                services.AddSingleton<INotifier>(_ => new TelegramNotifier(token, chatId));
-                services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
-                services.AddSingleton<BotConversationState>();
-                services.AddSingleton<IConversationFlowHandler, AddAnnouncementFlow>();
-                services.AddSingleton<IConversationFlowHandler, EditAnnouncementFlow>();
-                services.AddSingleton<IConversationFlowHandler, FooterFlow>();
-                services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
-                services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
-                services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, AddCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, EditNameCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, EditPlaceCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, EditDateTimeCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, EditCostCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, EditCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, DeleteAnnouncementCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, FooterAddCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, FooterListCommandHandler>();
-                services.AddSingleton<IBotCommandHandler, FooterDeleteCommandHandler>();
-                services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(token));
-                services.AddSingleton(sp => new BotRunner(
-                    sp.GetRequiredService<ITelegramBotClient>(),
-                    chatId,
-                    sp.GetRequiredService<PostsRepository>(),
-                    sp.GetRequiredService<AnnouncementsRepository>(),
-                    sp.GetRequiredService<FootersRepository>(),
-                    sp.GetRequiredService<BotCommandHelper>(),
-                    sp.GetRequiredService<BotConversationState>(),
-                    sp.GetServices<IBotCommandHandler>(),
-                    sp.GetServices<IConversationFlowHandler>()));
-            })
+            .ConfigureServices(services => services.AddWeekChgkSpbServices(settings, RssUrl))
             .Build();
 
         using var scope = host.Services.CreateScope();
@@ -79,6 +38,7 @@ internal class Program
         var notifier = services.GetRequiredService<INotifier>();
         var botRunner = services.GetRequiredService<BotRunner>();
         var botClient = services.GetRequiredService<ITelegramBotClient>();
+        var scheduler = services.GetService<ScheduledPostPublisher>();
 
         Console.WriteLine("Telegram notifier enabled");
 
@@ -92,6 +52,22 @@ internal class Program
         var me = await botClient.GetMe(cts.Token);
         Console.WriteLine(me.Username);
 
+        if (settings.HasChannel)
+        {
+            var hasAccess = await EnsureChannelAccessAsync(
+                botClient,
+                settings.ChannelId!,
+                me.Id,
+                cts.Token);
+
+            if (!hasAccess)
+            {
+                Console.WriteLine("Channel access validation failed.");
+                await host.StopAsync();
+                return;
+            }
+        }
+
         var commands = BotCommands.AsBotCommands();
         await botClient.SetMyCommands(
             commands: commands,
@@ -100,12 +76,29 @@ internal class Program
         botRunner.Start(cts.Token);
 
         await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+        var lastRssCheck = DateTime.UtcNow;
 
-        var timer = new PeriodicTimer(TimeSpan.FromHours(1));
+        if (scheduler is not null)
+        {
+            await scheduler.TryPublishAsync(DateTime.UtcNow, cts.Token);
+        }
+
+        var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         try
         {
             while (await timer.WaitForNextTickAsync(cts.Token))
-                await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+            {
+                if (DateTime.UtcNow - lastRssCheck >= TimeSpan.FromHours(1))
+                {
+                    await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+                    lastRssCheck = DateTime.UtcNow;
+                }
+
+                if (scheduler is not null)
+                {
+                    await scheduler.TryPublishAsync(DateTime.UtcNow, cts.Token);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -143,6 +136,73 @@ internal class Program
         }
     }
 
+    private static bool TryLoadSettings(out AppSettings settings)
+    {
+        var dbPath = ResolveDbPath(
+            Environment.GetEnvironmentVariable("DB_PATH"),
+            AppContext.BaseDirectory);
+        Console.WriteLine($"DB_PATH resolved to: {dbPath}");
+
+        var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
+        var chatIdVar = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID");
+        if (string.IsNullOrWhiteSpace(token) || !long.TryParse(chatIdVar, out var chatId))
+        {
+            Console.WriteLine("Telegram notifier disabled: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID");
+            settings = default!;
+            return false;
+        }
+
+        string? channelId = null;
+        ChannelPostScheduleOptions? scheduleOptions = null;
+        var channelIdVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_ID");
+        if (!string.IsNullOrWhiteSpace(channelIdVar))
+        {
+            var trimmedChannelId = channelIdVar.Trim();
+            var perWeekVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POSTS_PER_WEEK") ?? "2";
+            var daysVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POST_DAYS") ?? "Monday,Thursday";
+            var timeVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_POST_TIME") ?? "12:00";
+            var triggerWindowVar = Environment.GetEnvironmentVariable("TELEGRAM_CHANNEL_TRIGGER_WINDOW_MINUTES");
+
+            try
+            {
+                scheduleOptions = ChannelPostScheduleOptions.FromStrings(
+                    perWeekVar,
+                    daysVar,
+                    timeVar,
+                    triggerWindowVar);
+
+                if (long.TryParse(trimmedChannelId, out var parsedChannelId))
+                {
+                    channelId = trimmedChannelId;
+                    Console.WriteLine($"Telegram channel scheduler configured for chat {parsedChannelId}.");
+                }
+                else if (trimmedChannelId.StartsWith('@'))
+                {
+                    channelId = trimmedChannelId;
+                    Console.WriteLine($"Telegram channel scheduler configured for channel {trimmedChannelId}.");
+                }
+                else
+                {
+                    Console.WriteLine("Telegram channel scheduler disabled: TELEGRAM_CHANNEL_ID is invalid.");
+                    channelId = null;
+                    scheduleOptions = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Telegram channel scheduler disabled: {ex.Message}");
+                scheduleOptions = null;
+            }
+        }
+        else
+        {
+            Console.WriteLine("Telegram channel scheduler disabled: TELEGRAM_CHANNEL_ID not set.");
+        }
+
+        settings = new AppSettings(dbPath, token, chatId, channelId, scheduleOptions);
+        return true;
+    }
+
     private static string ResolveDbPath(string? envPath, string baseDir)
     {
         if (string.IsNullOrWhiteSpace(envPath))
@@ -160,4 +220,44 @@ internal class Program
         return Path.Combine(baseDir, trimmed);
 
     }
+
+    private static async Task<bool> EnsureChannelAccessAsync(
+        ITelegramBotClient botClient,
+        string channelId,
+        long botUserId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var chatId = BuildChatId(channelId);
+            _ = await botClient.GetChat(chatId, cancellationToken: ct);
+
+            var member = await botClient.GetChatMember(chatId, botUserId, cancellationToken: ct);
+            if (member.Status is ChatMemberStatus.Administrator or ChatMemberStatus.Creator)
+            {
+                return true;
+            }
+
+            Console.WriteLine($"Bot lacks administrator rights in channel {channelId}. Current status: {member.Status}.");
+            return false;
+        }
+        catch (ApiRequestException ex)
+        {
+            Console.WriteLine($"Channel access check failed for {channelId}: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error while checking channel access: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static ChatId BuildChatId(string value)
+    {
+        return long.TryParse(value, out var numeric)
+            ? new ChatId(numeric)
+            : new ChatId(value);
+    }
+
 }

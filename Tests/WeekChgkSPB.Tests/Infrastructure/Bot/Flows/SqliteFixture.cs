@@ -21,6 +21,7 @@ public sealed class SqliteFixture : IDisposable
     public PostsRepository CreatePostsRepository() => new(_databasePath);
     public AnnouncementsRepository CreateAnnouncementsRepository() => new(_databasePath);
     public FootersRepository CreateFootersRepository() => new(_databasePath);
+    public ChannelPostsRepository CreateChannelPostsRepository() => new(_databasePath);
 
     public void Dispose()
     {

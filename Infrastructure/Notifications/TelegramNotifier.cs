@@ -36,6 +36,7 @@ public class TelegramNotifier : INotifier
             ParseMode.Html,
             linkPreviewOptions: _noPreview,
             cancellationToken: ct);
+        await Task.Delay(500, ct);
     }
 
     private static string Escape(string s)
