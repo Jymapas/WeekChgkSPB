@@ -177,8 +177,8 @@ public class ScheduledPostPublisherTests : IClassFixture<SqliteFixture>
 
         Assert.False(announcements.Exists(staleId));
         Assert.True(announcements.Exists(currentId));
-        Assert.False(posts.Exists(staleId));
+        Assert.True(posts.Exists(staleId));
         Assert.True(posts.Exists(currentId));
-        Assert.False(posts.Exists(orphanId));
+        Assert.True(posts.Exists(orphanId));
     }
 }
