@@ -120,7 +120,6 @@ public class ScheduledPostPublisher
     {
         var thresholdUtc = utcNow.AddDays(-_announcementRetentionDays);
         _announcements.DeleteOlderThan(thresholdUtc);
-        _posts.DeleteWithoutAnnouncements();
     }
 
     private (DateTime FromUtc, DateTime? ToUtc) ResolveRangeUtc(DateTime utcNow)
