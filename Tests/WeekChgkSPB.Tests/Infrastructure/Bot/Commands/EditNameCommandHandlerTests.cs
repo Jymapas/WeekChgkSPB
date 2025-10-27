@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -40,7 +42,12 @@ public class EditNameCommandHandlerTests : IClassFixture<SqliteFixture>
         existingState.Step = AddStep.EditWaitingName;
         existingState.Existing = announcements.Get(5);
 
-        var handler = new EditNameCommandHandler();
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new EditNameCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
             $"{BotCommands.EditName} 5 Новое имя",
             announcements,
@@ -58,5 +65,6 @@ public class EditNameCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Single(sentMessages);
         Assert.Equal("Название обновлено", sentMessages[0]);
         Assert.False(stateStore.TryGet(1, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -40,7 +42,12 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
         existingState.Step = AddStep.EditWaitingCost;
         existingState.Existing = announcements.Get(13);
 
-        var handler = new EditCostCommandHandler();
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new EditCostCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
             $"{BotCommands.EditCost} 13 250",
             announcements,
@@ -57,6 +64,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Single(sentMessages);
         Assert.Equal("Стоимость обновлена", sentMessages[0]);
         Assert.False(stateStore.TryGet(1, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -79,7 +87,12 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
             Cost = 300
         });
 
-        var handler = new EditCostCommandHandler();
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new EditCostCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
             $"{BotCommands.EditCost} 14 notanumber",
             announcements,
@@ -100,5 +113,6 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.NotNull(state.Existing);
         Assert.Equal(14, state.Existing!.Id);
         Assert.Equal(300, announcements.Get(14)!.Cost);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }
