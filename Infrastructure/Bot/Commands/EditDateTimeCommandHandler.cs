@@ -6,8 +6,8 @@ namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
 internal class EditDateTimeCommandHandler : EditAnnouncementCommandHandlerBase
 {
-    public EditDateTimeCommandHandler()
-        : base(BotCommands.EditDateTime, AddStep.EditWaitingDateTime, "/edit_datetime <id> [новая дата и время]")
+    public EditDateTimeCommandHandler(IChannelPostUpdater channelPostUpdater)
+        : base(BotCommands.EditDateTime, AddStep.EditWaitingDateTime, "/edit_datetime <id> [новая дата и время]", channelPostUpdater)
     {
     }
 

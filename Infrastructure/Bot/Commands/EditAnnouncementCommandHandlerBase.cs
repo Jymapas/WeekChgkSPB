@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using WeekChgkSPB;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
@@ -11,12 +12,18 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
     private readonly string _command;
     private readonly AddStep _waitingStep;
     private readonly string _usage;
+    private readonly IChannelPostUpdater _channelPostUpdater;
 
-    protected EditAnnouncementCommandHandlerBase(string command, AddStep waitingStep, string usage)
+    protected EditAnnouncementCommandHandlerBase(
+        string command,
+        AddStep waitingStep,
+        string usage,
+        IChannelPostUpdater channelPostUpdater)
     {
         _command = command;
         _waitingStep = waitingStep;
         _usage = usage;
+        _channelPostUpdater = channelPostUpdater;
     }
 
     public bool CanHandle(BotCommandContext context)
@@ -69,6 +76,7 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
             }
 
             context.Announcements.Update(existing);
+            await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
             await context.Bot.SendMessage(msg.Chat.Id, message, cancellationToken: context.CancellationToken);
 
             if (msg.From is not null)
