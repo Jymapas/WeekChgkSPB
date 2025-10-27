@@ -2,11 +2,19 @@ using System;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using WeekChgkSPB;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Flows;
 
 internal class EditAnnouncementFlow : IConversationFlowHandler
 {
+    private readonly IChannelPostUpdater _channelPostUpdater;
+
+    public EditAnnouncementFlow(IChannelPostUpdater channelPostUpdater)
+    {
+        _channelPostUpdater = channelPostUpdater;
+    }
+
     public bool CanHandle(AddStep step)
     {
         return step is AddStep.EditWaitingName
@@ -59,7 +67,7 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
         };
     }
 
-    private static async Task<bool> HandleEdit(
+    private async Task<bool> HandleEdit(
         BotCommandContext context,
         AddAnnouncementState state,
         Func<Announcement, (bool Success, string Message)> mutator)
@@ -80,6 +88,7 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
         }
 
         context.Announcements.Update(state.Existing);
+        await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
         await context.Bot.SendMessage(context.Message.Chat.Id, response, cancellationToken: context.CancellationToken);
 
         state.Step = AddStep.Done;

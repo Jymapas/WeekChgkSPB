@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -40,7 +42,12 @@ public class EditPlaceCommandHandlerTests : IClassFixture<SqliteFixture>
         existingState.Step = AddStep.EditWaitingPlace;
         existingState.Existing = announcements.Get(7);
 
-        var handler = new EditPlaceCommandHandler();
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new EditPlaceCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
             $"{BotCommands.EditPlace} 7 Новый клуб",
             announcements,
@@ -57,5 +64,6 @@ public class EditPlaceCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Single(sentMessages);
         Assert.Equal("Место обновлено", sentMessages[0]);
         Assert.False(stateStore.TryGet(1, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

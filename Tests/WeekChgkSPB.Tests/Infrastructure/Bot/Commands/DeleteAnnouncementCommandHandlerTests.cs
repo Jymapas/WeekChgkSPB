@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -25,8 +27,9 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
         var footers = _fixture.CreateFootersRepository();
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
+        var updater = new Mock<IChannelPostUpdater>();
 
-        var handler = new DeleteAnnouncementCommandHandler();
+        var handler = new DeleteAnnouncementCommandHandler(updater.Object);
         var (context, sent, _) = CommandTestContextFactory.Create(
             BotCommands.Delete,
             announcements,
@@ -39,6 +42,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
 
         Assert.Single(sent);
         Assert.Contains("Используй", sent[0]);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -50,8 +54,9 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
         var footers = _fixture.CreateFootersRepository();
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
+        var updater = new Mock<IChannelPostUpdater>();
 
-        var handler = new DeleteAnnouncementCommandHandler();
+        var handler = new DeleteAnnouncementCommandHandler(updater.Object);
         var (context, sent, _) = CommandTestContextFactory.Create(
             $"{BotCommands.Delete} 42",
             announcements,
@@ -64,6 +69,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
 
         Assert.Single(sent);
         Assert.Contains("не найден", sent[0]);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -75,6 +81,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
         var footers = _fixture.CreateFootersRepository();
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
+        var updater = new Mock<IChannelPostUpdater>();
 
         posts.Insert(new Post { Id = 5, Title = "Title", Link = "link", Description = "desc" });
         announcements.Insert(new Announcement
@@ -86,7 +93,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
             Cost = 100
         });
 
-        var handler = new DeleteAnnouncementCommandHandler();
+        var handler = new DeleteAnnouncementCommandHandler(updater.Object);
         var (context, sent, _) = CommandTestContextFactory.Create(
             $"{BotCommands.Delete} 5",
             announcements,
@@ -100,5 +107,6 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
         Assert.Single(sent);
         Assert.Contains("удален", sent[0]);
         Assert.False(announcements.Exists(5));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

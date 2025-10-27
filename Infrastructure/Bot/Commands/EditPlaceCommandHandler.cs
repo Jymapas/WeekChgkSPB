@@ -1,11 +1,12 @@
 using WeekChgkSPB;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
 internal class EditPlaceCommandHandler : EditAnnouncementCommandHandlerBase
 {
-    public EditPlaceCommandHandler()
-        : base(BotCommands.EditPlace, AddStep.EditWaitingPlace, "/edit_place <id> [новое место]")
+    public EditPlaceCommandHandler(IChannelPostUpdater channelPostUpdater)
+        : base(BotCommands.EditPlace, AddStep.EditWaitingPlace, "/edit_place <id> [новое место]", channelPostUpdater)
     {
     }
 

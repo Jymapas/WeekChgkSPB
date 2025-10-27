@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -41,7 +43,12 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
         existingState.Step = AddStep.EditWaitingDateTime;
         existingState.Existing = announcements.Get(9);
 
-        var handler = new EditDateTimeCommandHandler();
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new EditDateTimeCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
             $"{BotCommands.EditDateTime} 9 2025-08-10T19:30:00Z",
             announcements,
@@ -60,6 +67,7 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Single(sentMessages);
         Assert.Equal("Дата и время обновлены", sentMessages[0]);
         Assert.False(stateStore.TryGet(1, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -83,7 +91,12 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
             Cost = 200
         });
 
-        var handler = new EditDateTimeCommandHandler();
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new EditDateTimeCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
             $"{BotCommands.EditDateTime} 11 не-дата",
             announcements,
@@ -104,5 +117,6 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.NotNull(state.Existing);
         Assert.Equal(11, state.Existing!.Id);
         Assert.Equal(originalUtc, announcements.Get(11)!.DateTimeUtc);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

@@ -25,16 +25,21 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
         services.AddSingleton<BotConversationState>();
         services.AddSingleton<IConversationFlowHandler, AddAnnouncementFlow>();
-        services.AddSingleton<IConversationFlowHandler, EditAnnouncementFlow>();
+        services.AddSingleton<IConversationFlowHandler>(sp => new EditAnnouncementFlow(
+            sp.GetRequiredService<IChannelPostUpdater>()));
         services.AddSingleton<IConversationFlowHandler, FooterFlow>();
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
         services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddCommandHandler>();
-        services.AddSingleton<IBotCommandHandler, EditNameCommandHandler>();
-        services.AddSingleton<IBotCommandHandler, EditPlaceCommandHandler>();
-        services.AddSingleton<IBotCommandHandler, EditDateTimeCommandHandler>();
-        services.AddSingleton<IBotCommandHandler, EditCostCommandHandler>();
+        services.AddSingleton<IBotCommandHandler>(sp => new EditNameCommandHandler(
+            sp.GetRequiredService<IChannelPostUpdater>()));
+        services.AddSingleton<IBotCommandHandler>(sp => new EditPlaceCommandHandler(
+            sp.GetRequiredService<IChannelPostUpdater>()));
+        services.AddSingleton<IBotCommandHandler>(sp => new EditDateTimeCommandHandler(
+            sp.GetRequiredService<IChannelPostUpdater>()));
+        services.AddSingleton<IBotCommandHandler>(sp => new EditCostCommandHandler(
+            sp.GetRequiredService<IChannelPostUpdater>()));
         services.AddSingleton<IBotCommandHandler, EditCommandHandler>();
         services.AddSingleton<IBotCommandHandler, DeleteAnnouncementCommandHandler>();
         services.AddSingleton<IBotCommandHandler, FooterAddCommandHandler>();

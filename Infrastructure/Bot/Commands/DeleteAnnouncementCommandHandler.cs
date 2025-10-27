@@ -1,11 +1,19 @@
 using System;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
 internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
 {
+    private readonly IChannelPostUpdater _channelPostUpdater;
+
+    public DeleteAnnouncementCommandHandler(IChannelPostUpdater channelPostUpdater)
+    {
+        _channelPostUpdater = channelPostUpdater;
+    }
+
     public bool CanHandle(BotCommandContext context)
     {
         return context.Helper.IsCommand(context.Message.Text, BotCommands.Delete);
@@ -28,10 +36,15 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
             return;
         }
 
-        context.Announcements.Delete(id);
+        var deleted = context.Announcements.Delete(id);
         if (msg.From is not null)
         {
             context.StateStore.Remove(msg.From.Id);
+        }
+
+        if (deleted)
+        {
+            await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
         }
 
         await context.Bot.SendMessage(
