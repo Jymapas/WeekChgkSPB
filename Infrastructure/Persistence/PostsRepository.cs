@@ -1,4 +1,6 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 
 namespace WeekChgkSPB;
@@ -55,17 +57,41 @@ public class PostsRepository
         cmd.ExecuteNonQuery();
     }
 
-    public int DeleteWithoutAnnouncements()
+    public int DeleteWithoutAnnouncementsNotInFeed(IReadOnlyCollection<long> rssIds)
     {
+        if (rssIds is null || rssIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var keepIds = rssIds
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        if (keepIds.Count == 0)
+        {
+            return 0;
+        }
+
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         using var cmd = connection.CreateCommand();
+        var placeholders = new List<string>(keepIds.Count);
+        for (var i = 0; i < keepIds.Count; i++)
+        {
+            var paramName = $"@id{i}";
+            placeholders.Add(paramName);
+            cmd.Parameters.AddWithValue(paramName, keepIds[i]);
+        }
+
+        var keepClause = string.Join(", ", placeholders);
         cmd.CommandText =
-            @"DELETE FROM posts
-              WHERE NOT EXISTS (
-                  SELECT 1 FROM announcements AS a
-                  WHERE a.id = posts.id
-              )";
+            $@"DELETE FROM posts
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM announcements AS a
+                   WHERE a.id = posts.id
+               )
+               AND posts.id NOT IN ({keepClause})";
         return cmd.ExecuteNonQuery();
     }
 }

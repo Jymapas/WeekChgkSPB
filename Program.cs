@@ -113,8 +113,13 @@ internal class Program
     {
         try
         {
-            var posts = fetcher.FetchPosts();
-            foreach (var post in posts.Where(p => p.Id != 0 && !repo.Exists(p.Id)))
+            var feedPosts = fetcher.FetchPosts();
+            var feedIds = feedPosts
+                .Where(p => p.Id != 0)
+                .Select(p => p.Id)
+                .ToList();
+
+            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id)))
             {
                 repo.Insert(post);
                 Console.WriteLine($"New post: {post.Id} — {post.Title}");
@@ -129,6 +134,8 @@ internal class Program
 
                 await Task.Delay(250, ct);
             }
+
+            repo.DeleteWithoutAnnouncementsNotInFeed(feedIds);
         }
         catch (Exception e)
         {
