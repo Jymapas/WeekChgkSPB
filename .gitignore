@@ -56,3 +56,4 @@ nunit-*.xml
 .env
 *.db*
 .DS_Store
+.vscode
