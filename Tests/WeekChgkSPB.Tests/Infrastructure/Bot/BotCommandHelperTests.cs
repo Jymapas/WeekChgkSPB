@@ -176,7 +176,7 @@ public class BotCommandHelperTests
     }
 
     [Fact]
-    public void ResolveDateRangeOrDefault_ParsesExplicitRange()
+    public void ResolveDateRangeOrDefault_ParsesExplicitStart()
     {
         var nowUtc = DateTime.UtcNow;
         var start = nowUtc.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -185,23 +185,21 @@ public class BotCommandHelperTests
 
         var (fromUtc, toUtc) = _helper.ResolveDateRangeOrDefault(command);
 
-        Assert.True(fromUtc <= toUtc);
+        Assert.Null(toUtc);
         Assert.Equal(DateTime.Parse(start, CultureInfo.InvariantCulture), TimeZoneInfo.ConvertTimeFromUtc(fromUtc, PostFormatter.Moscow).Date);
-        Assert.Equal(DateTime.Parse(end, CultureInfo.InvariantCulture), TimeZoneInfo.ConvertTimeFromUtc(toUtc, PostFormatter.Moscow).Date);
     }
 
     [Fact]
-    public void ResolveDateRangeOrDefault_FallbackToTwoWeeks()
+    public void ResolveDateRangeOrDefault_FallbackToToday()
     {
         var command = "/makepost";
 
         var (fromUtc, toUtc) = _helper.ResolveDateRangeOrDefault(command);
 
         var moscowNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PostFormatter.Moscow).Date;
-        var expectedEnd = moscowNow.AddDays(14).AddHours(23).AddMinutes(59);
 
         Assert.Equal(moscowNow, TimeZoneInfo.ConvertTimeFromUtc(fromUtc, PostFormatter.Moscow).Date);
-        Assert.Equal(expectedEnd, TimeZoneInfo.ConvertTimeFromUtc(toUtc, PostFormatter.Moscow));
+        Assert.Null(toUtc);
     }
 
     [Theory]
