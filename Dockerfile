@@ -12,10 +12,10 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/runtime:9.0
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tzdata locales \
- && rm -rf /var/lib/apt/lists/* \
- && sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen \
- && locale-gen
+    && apt-get install -y --no-install-recommends tzdata locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen
 
 ENV TZ=Europe/Moscow \
     LANG=ru_RU.UTF-8 \
@@ -25,6 +25,10 @@ ENV TZ=Europe/Moscow \
 VOLUME ["/data"]
 
 WORKDIR /app
+
 COPY --from=build /app/publish ./
 
-ENTRYPOINT ["dotnet", "WeekChgkSPB.dll"]
+COPY run.sh ./run.sh
+RUN chmod +x ./run.sh
+
+ENTRYPOINT ["./run.sh"]
