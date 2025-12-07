@@ -3,8 +3,8 @@ set -e
 
 echo "Waiting for network..."
 
-while ! ping -c1 api.telegram.org >/dev/null 2>&1; do
-  echo "No network yet, retrying in 5s..."
+while ! ping -c1 8.8.8.8 >/dev/null 2>&1; do
+  echo "No network yet, retrying in 10s..."
   sleep 10
 done
 
