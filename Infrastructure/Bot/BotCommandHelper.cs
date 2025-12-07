@@ -32,20 +32,18 @@ internal class BotCommandHelper
         "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
         "стоимость (целое число).";
 
-    public (DateTime FromUtc, DateTime ToUtc) ResolveDateRangeOrDefault(string commandText, int defaultDays = 14)
+    public (DateTime FromUtc, DateTime? ToUtc) ResolveDateRangeOrDefault(string commandText)
     {
         var parts = commandText.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length >= 3 && TryParseDateTime(parts[1], out var fromUtc) && TryParseDateTime(parts[2], out var toUtc))
+        if (parts.Length >= 2 && TryParseDateTime(parts[1], out var fromUtc))
         {
-            return (fromUtc, toUtc);
+            return (fromUtc, null);
         }
 
         var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _moscow);
         var startLocal = nowLocal.Date;
-        var endLocal = startLocal.AddDays(defaultDays).AddHours(23).AddMinutes(59);
         var fallbackFromUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, _moscow);
-        var fallbackToUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, _moscow);
-        return (fallbackFromUtc, fallbackToUtc);
+        return (fallbackFromUtc, null);
     }
 
     public bool IsCommand(string? text, string command)
