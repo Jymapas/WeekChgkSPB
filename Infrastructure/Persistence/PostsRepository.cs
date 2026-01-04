@@ -44,6 +44,24 @@ public class PostsRepository
         return count > 0;
     }
 
+    public bool TryGetIdByLink(string link, out long id)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"SELECT id FROM posts WHERE link=@link LIMIT 1";
+        cmd.Parameters.AddWithValue("@link", link);
+        var result = cmd.ExecuteScalar();
+        if (result is null || result is DBNull)
+        {
+            id = 0;
+            return false;
+        }
+
+        id = (long)result;
+        return true;
+    }
+
     public void Insert(Post post)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
