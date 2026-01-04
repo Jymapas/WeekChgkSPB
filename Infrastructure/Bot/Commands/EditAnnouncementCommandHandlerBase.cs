@@ -41,16 +41,17 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
         }
 
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 2 || !long.TryParse(parts[1], out var id))
+        if (parts.Length < 2)
         {
             await context.Bot.SendMessage(msg.Chat.Id, $"Используй: {_usage}", cancellationToken: context.CancellationToken);
             return;
         }
 
-        var existing = context.Announcements.Get(id);
+        var link = context.Helper.NormalizePostLink(parts[1]);
+        var existing = context.Announcements.GetByLink(link);
         if (existing is null)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Анонс с таким id не найден", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, "Анонс с такой ссылкой не найден", cancellationToken: context.CancellationToken);
             return;
         }
 

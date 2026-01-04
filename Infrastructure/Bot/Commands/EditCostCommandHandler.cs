@@ -6,7 +6,7 @@ namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 internal class EditCostCommandHandler : EditAnnouncementCommandHandlerBase
 {
     public EditCostCommandHandler(IChannelPostUpdater channelPostUpdater)
-        : base(BotCommands.EditCost, AddStep.EditWaitingCost, "/edit_cost <id> [новая стоимость]", channelPostUpdater)
+        : base(BotCommands.EditCost, AddStep.EditWaitingCost, "/edit_cost <ссылка|id> [новая стоимость]", channelPostUpdater)
     {
     }
 
