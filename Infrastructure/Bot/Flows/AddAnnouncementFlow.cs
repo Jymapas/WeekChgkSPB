@@ -40,26 +40,30 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
     private async Task<bool> HandleWaitingId(BotCommandContext context, AddAnnouncementState state)
     {
         var msg = context.Message;
-        if (!long.TryParse(msg.Text, out var id))
+        var link = context.Helper.NormalizePostLink(msg.Text);
+        if (string.IsNullOrWhiteSpace(link))
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Нужен числовой id", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, "Нужна ссылка на пост или id в ЖЖ", cancellationToken: context.CancellationToken);
             return true;
         }
 
-        if (!context.Posts.Exists(id))
+        if (context.Announcements.GetByLink(link) is not null)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Такого поста нет в базе", cancellationToken: context.CancellationToken);
-            return true;
-        }
-
-        if (context.Announcements.Exists(id))
-        {
-            await context.Bot.SendMessage(msg.Chat.Id, "Анонс для этого id уже есть", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, "Анонс с такой ссылкой уже есть", cancellationToken: context.CancellationToken);
             state.Step = AddStep.None;
             return true;
         }
 
-        state.Draft.Id = id;
+        if (context.Posts.TryGetIdByLink(link, out var id))
+        {
+            state.Draft.Id = id;
+        }
+        else
+        {
+            state.Draft.Id = 0;
+        }
+
+        state.DraftLink = link;
         state.Step = AddStep.WaitingName;
         await context.Bot.SendMessage(msg.Chat.Id, "Название турнира", cancellationToken: context.CancellationToken);
         return true;
@@ -116,7 +120,20 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         }
 
         state.Draft.Cost = cost;
-        context.Announcements.Insert(state.Draft);
+        if (state.Draft.Id > 0)
+        {
+            context.Announcements.Insert(state.Draft);
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(state.DraftLink))
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Нужна ссылка на пост", cancellationToken: context.CancellationToken);
+                return true;
+            }
+
+            context.Announcements.InsertExternal(state.Draft, state.DraftLink);
+        }
         await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
 
         state.Step = AddStep.Done;
@@ -129,26 +146,29 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
     private async Task<bool> HandleWaitingLines(BotCommandContext context, AddAnnouncementState state)
     {
         var content = context.Message.Text ?? string.Empty;
-        if (!context.Helper.TryBuildAnnouncementFromLines(content, out var announcement, out var error))
+        if (!context.Helper.TryBuildAnnouncementFromLines(content, out var announcement, out var link, out var error))
         {
             await context.Bot.SendMessage(context.Message.Chat.Id, error, cancellationToken: context.CancellationToken);
             await context.Bot.SendMessage(context.Message.Chat.Id, context.Helper.AddLinesPrompt, cancellationToken: context.CancellationToken);
             return true;
         }
 
-        if (!context.Posts.Exists(announcement.Id))
+        if (context.Announcements.GetByLink(link) is not null)
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, "Такого поста нет в базе", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, "Анонс с такой ссылкой уже есть", cancellationToken: context.CancellationToken);
             return true;
         }
 
-        if (context.Announcements.Exists(announcement.Id))
+        if (context.Posts.TryGetIdByLink(link, out var id))
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, "Анонс для этого id уже есть", cancellationToken: context.CancellationToken);
-            return true;
+            announcement.Id = id;
+            context.Announcements.Insert(announcement);
+        }
+        else
+        {
+            context.Announcements.InsertExternal(announcement, link);
         }
 
-        context.Announcements.Insert(announcement);
         await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
         await context.Bot.SendMessage(context.Message.Chat.Id, "Сохранено", cancellationToken: context.CancellationToken);
         context.StateStore.Remove(context.Message.From!.Id);
