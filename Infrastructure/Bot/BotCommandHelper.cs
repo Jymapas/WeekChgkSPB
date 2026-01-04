@@ -9,6 +9,7 @@ namespace WeekChgkSPB.Infrastructure.Bot;
 internal class BotCommandHelper
 {
     private readonly TimeZoneInfo _moscow;
+    private const string LiveJournalBaseUrl = "https://chgk-spb.livejournal.com";
 
     private static readonly string[] MoscowDateTimeFormats =
     {
@@ -28,7 +29,7 @@ internal class BotCommandHelper
     }
 
     public string AddLinesPrompt =>
-        "Отправь 5 или 6 строк: id поста, название турнира, место, дата и время по Петербургу " +
+        "Отправь 5 или 6 строк: ссылка на пост (или id в ЖЖ), название турнира, место, дата и время по Петербургу " +
         "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
         "стоимость (целое число).";
 
@@ -131,9 +132,10 @@ internal class BotCommandHelper
         return false;
     }
 
-    public bool TryBuildAnnouncementFromLines(string content, out Announcement announcement, out string error)
+    public bool TryBuildAnnouncementFromLines(string content, out Announcement announcement, out string link, out string error)
     {
         announcement = default!;
+        link = string.Empty;
 
         var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
         var rawLines = normalized.Split('\n');
@@ -146,7 +148,7 @@ internal class BotCommandHelper
 
         if (lines.Count < 5)
         {
-            error = "Нужно передать 5 или 6 строк: id, название, место, дата и время (одна строка ISO или две строки), стоимость.";
+            error = "Нужно передать 5 или 6 строк: ссылка или id, название, место, дата и время (одна строка ISO или две строки), стоимость.";
             return false;
         }
 
@@ -156,9 +158,10 @@ internal class BotCommandHelper
             return false;
         }
 
-        if (!long.TryParse(lines[0], out var id))
+        link = NormalizePostLink(lines[0]);
+        if (string.IsNullOrWhiteSpace(link))
         {
-            error = "Первая строка — числовой id.";
+            error = "Первая строка — ссылка на пост или id в ЖЖ.";
             return false;
         }
 
@@ -199,7 +202,6 @@ internal class BotCommandHelper
 
         announcement = new Announcement
         {
-            Id = id,
             TournamentName = name,
             Place = place,
             DateTimeUtc = dt,
@@ -217,6 +219,23 @@ internal class BotCommandHelper
         state.Draft.Place = string.Empty;
         state.Draft.DateTimeUtc = DateTime.MinValue;
         state.Draft.Cost = 0;
+        state.DraftLink = string.Empty;
+    }
+
+    public string NormalizePostLink(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = input.Trim();
+        if (long.TryParse(trimmed, out var id) && id > 0)
+        {
+            return $"{LiveJournalBaseUrl}/{id}.html";
+        }
+
+        return trimmed;
     }
 
     public string EscapeForCode(string text)
