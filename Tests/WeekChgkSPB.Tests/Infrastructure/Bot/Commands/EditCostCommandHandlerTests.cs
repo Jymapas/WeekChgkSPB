@@ -28,7 +28,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        posts.Insert(new Post { Id = 13, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 13, Title = "Title", Link = "https://example.com/post-13", Description = "desc" });
         announcements.Insert(new Announcement
         {
             Id = 13,
@@ -49,7 +49,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
 
         var handler = new EditCostCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.EditCost} 13 250",
+            $"{BotCommands.EditCost} https://example.com/post-13 250",
             announcements,
             posts,
             footers,
@@ -77,7 +77,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        posts.Insert(new Post { Id = 14, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 14, Title = "Title", Link = "https://example.com/post-14", Description = "desc" });
         announcements.Insert(new Announcement
         {
             Id = 14,
@@ -94,7 +94,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
 
         var handler = new EditCostCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.EditCost} 14 notanumber",
+            $"{BotCommands.EditCost} https://example.com/post-14 notanumber",
             announcements,
             posts,
             footers,

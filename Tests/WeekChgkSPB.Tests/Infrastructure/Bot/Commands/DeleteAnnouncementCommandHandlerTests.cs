@@ -58,7 +58,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
 
         var handler = new DeleteAnnouncementCommandHandler(updater.Object);
         var (context, sent, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.Delete} 42",
+            $"{BotCommands.Delete} https://example.com/42",
             announcements,
             posts,
             footers,
@@ -73,7 +73,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
     }
 
     [Fact]
-    public async Task HandleAsync_ValidId_DeletesAnnouncement()
+    public async Task HandleAsync_ValidLink_DeletesAnnouncement()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();
@@ -83,7 +83,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
         var stateStore = new BotConversationState();
         var updater = new Mock<IChannelPostUpdater>();
 
-        posts.Insert(new Post { Id = 5, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 5, Title = "Title", Link = "https://example.com/post", Description = "desc" });
         announcements.Insert(new Announcement
         {
             Id = 5,
@@ -95,7 +95,7 @@ public class DeleteAnnouncementCommandHandlerTests : IClassFixture<SqliteFixture
 
         var handler = new DeleteAnnouncementCommandHandler(updater.Object);
         var (context, sent, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.Delete} 5",
+            $"{BotCommands.Delete} https://example.com/post",
             announcements,
             posts,
             footers,

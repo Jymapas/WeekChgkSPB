@@ -28,7 +28,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var posts = _fixture.CreatePostsRepository();
         var announcements = _fixture.CreateAnnouncementsRepository();
         var footers = _fixture.CreateFootersRepository();
-        posts.Insert(new Post { Id = 42, Title = "t", Link = "l", Description = "d" });
+        posts.Insert(new Post { Id = 42, Title = "t", Link = "https://chgk-spb.livejournal.com/42.html", Description = "d" });
 
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
@@ -57,10 +57,11 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.True(handled);
         Assert.Equal(AddStep.WaitingName, state.Step);
         Assert.Equal(42, state.Draft.Id);
+        Assert.Equal("https://chgk-spb.livejournal.com/42.html", state.DraftLink);
     }
 
     [Fact]
-    public async Task HandleWaitingId_NonNumericId_KeepsWaitingId()
+    public async Task HandleWaitingId_EmptyLink_KeepsWaitingId()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
@@ -77,7 +78,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
             botClient,
-            "не число",
+            "   ",
             chatId,
             userId,
             announcements,
@@ -94,10 +95,11 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.True(handled);
         Assert.Equal(AddStep.WaitingId, state.Step);
         Assert.Equal(0, state.Draft.Id);
+        Assert.Equal(string.Empty, state.DraftLink);
     }
 
     [Fact]
-    public async Task HandleWaitingId_PostMissing_KeepsWaitingId()
+    public async Task HandleWaitingId_ExternalLink_MovesToWaitingName()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
@@ -114,7 +116,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
             botClient,
-            "123",
+            "https://example.com/external",
             chatId,
             userId,
             announcements,
@@ -129,8 +131,9 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var handled = await flow.HandleAsync(context, state);
 
         Assert.True(handled);
-        Assert.Equal(AddStep.WaitingId, state.Step);
-        Assert.False(announcements.Exists(123));
+        Assert.Equal(AddStep.WaitingName, state.Step);
+        Assert.Equal(0, state.Draft.Id);
+        Assert.Equal("https://example.com/external", state.DraftLink);
     }
 
     [Fact]
@@ -141,7 +144,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var announcements = _fixture.CreateAnnouncementsRepository();
         var footers = _fixture.CreateFootersRepository();
 
-        posts.Insert(new Post { Id = 200, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 200, Title = "Title", Link = "https://example.com/post-200", Description = "desc" });
         announcements.Insert(new Announcement
         {
             Id = 200,
@@ -161,7 +164,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
             botClient,
-            "200",
+            "https://example.com/post-200",
             chatId,
             userId,
             announcements,
@@ -189,7 +192,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var announcements = _fixture.CreateAnnouncementsRepository();
         var footers = _fixture.CreateFootersRepository();
 
-        posts.Insert(new Post { Id = 7, Title = "title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 7, Title = "title", Link = "https://example.com/post-7", Description = "desc" });
 
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
@@ -201,7 +204,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var payload = string.Join('\n', new[]
         {
-            "7",
+            "https://example.com/post-7",
             "Чемпионат",
             "Клуб",
             "2025-08-10T19:30",
@@ -232,7 +235,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleWaitingLines_PostMissing_KeepsState()
+    public async Task HandleWaitingLines_ExternalLink_InsertsAnnouncementAndCompletes()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
@@ -249,7 +252,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var payload = string.Join('\n', new[]
         {
-            "100",
+            "https://example.com/external-100",
             "Турнир",
             "Место",
             "2025-08-10T19:30",
@@ -273,11 +276,9 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var handled = await flow.HandleAsync(context, state);
 
         Assert.True(handled);
-        Assert.False(announcements.Exists(100));
-        Assert.Equal(AddStep.WaitingLines, state.Step);
-        Assert.True(stateStore.TryGet(userId, out var stored));
-        Assert.Same(state, stored);
-        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never());
+        Assert.NotNull(announcements.GetByLink("https://example.com/external-100"));
+        Assert.False(stateStore.TryGet(userId, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once());
     }
 
     [Fact]
@@ -288,7 +289,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var announcements = _fixture.CreateAnnouncementsRepository();
         var footers = _fixture.CreateFootersRepository();
 
-        posts.Insert(new Post { Id = 101, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 101, Title = "Title", Link = "https://example.com/post-101", Description = "desc" });
         announcements.Insert(new Announcement
         {
             Id = 101,
@@ -308,7 +309,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var payload = string.Join('\n', new[]
         {
-            "101",
+            "https://example.com/post-101",
             "Новый",
             "Место",
             "2025-08-10T19:30",
