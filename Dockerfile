@@ -12,7 +12,7 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/runtime:9.0
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tzdata locales \
+    && apt-get install -y --no-install-recommends tzdata locales iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen
