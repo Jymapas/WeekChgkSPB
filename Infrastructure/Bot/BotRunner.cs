@@ -16,6 +16,8 @@ internal class BotRunner
     private readonly PostsRepository _posts;
     private readonly AnnouncementsRepository _announcements;
     private readonly FootersRepository _footers;
+    private readonly UserManagementRepository _userManagement;
+    private readonly ModerationHandler _moderationHandler;
     private readonly BotCommandHelper _helper;
     private readonly BotConversationState _stateStore;
     private readonly IReadOnlyList<IBotCommandHandler> _handlers;
@@ -27,6 +29,8 @@ internal class BotRunner
         PostsRepository posts,
         AnnouncementsRepository announcements,
         FootersRepository footers,
+        UserManagementRepository userManagement,
+        ModerationHandler moderationHandler,
         BotCommandHelper helper,
         BotConversationState stateStore,
         IEnumerable<IBotCommandHandler> handlers,
@@ -37,6 +41,8 @@ internal class BotRunner
         _posts = posts;
         _announcements = announcements;
         _footers = footers;
+        _userManagement = userManagement;
+        _moderationHandler = moderationHandler;
         _helper = helper;
         _stateStore = stateStore;
         _handlers = handlers.ToList();
@@ -45,7 +51,7 @@ internal class BotRunner
 
     public void Start(CancellationToken ct)
     {
-        var opts = new ReceiverOptions { AllowedUpdates = Array.Empty<UpdateType>() };
+        var opts = new ReceiverOptions { AllowedUpdates = [UpdateType.Message, UpdateType.CallbackQuery] };
         _bot.StartReceiving(HandleUpdate, HandleError, opts, ct);
     }
 
@@ -57,13 +63,14 @@ internal class BotRunner
 
     internal async Task HandleUpdate(ITelegramBotClient bot, Update update, CancellationToken ct)
     {
-        var message = update.Message;
-        if (message is null)
+        if (update.CallbackQuery is not null)
         {
+            await HandleCallbackQuery(bot, update.CallbackQuery, ct);
             return;
         }
 
-        if (message.Chat.Id != _allowedChatId)
+        var message = update.Message;
+        if (message is null)
         {
             return;
         }
@@ -73,7 +80,8 @@ internal class BotRunner
             return;
         }
 
-        var context = new BotCommandContext(_bot, message, ct, _announcements, _posts, _footers, _stateStore, _helper);
+        var isAdminChat = message.Chat.Id == _allowedChatId;
+        var context = new BotCommandContext(_bot, message, ct, _announcements, _posts, _footers, _stateStore, _helper, isAdminChat, _userManagement, _moderationHandler);
 
         if (await HandleCommandAsync(context))
         {
@@ -81,6 +89,27 @@ internal class BotRunner
         }
 
         await HandleFlowAsync(context);
+    }
+
+    private async Task HandleCallbackQuery(ITelegramBotClient bot, Telegram.Bot.Types.CallbackQuery callbackQuery, CancellationToken ct)
+    {
+        if (callbackQuery.Message is null || callbackQuery.Data is null)
+        {
+            return;
+        }
+
+        if (callbackQuery.Message.Chat.Id != _allowedChatId)
+        {
+            await bot.AnswerCallbackQuery(callbackQuery.Id, "Доступ запрещен", cancellationToken: ct);
+            return;
+        }
+
+        if (await _moderationHandler.HandleCallbackQuery(callbackQuery, ct))
+        {
+            return;
+        }
+
+        await bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
     }
 
     private async Task<bool> HandleCommandAsync(BotCommandContext context)
