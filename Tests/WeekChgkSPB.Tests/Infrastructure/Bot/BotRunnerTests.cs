@@ -316,7 +316,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
         Assert.Equal(1, secondFlow.HandleCallCount);
     }
 
-    private static Update CreateUpdate(string text, long chatId, long? userId)
+    private static Update CreateUpdate(string? text, long chatId, long? userId)
     {
         var payload = new
         {
@@ -327,7 +327,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
                 date = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 text,
                 chat = new { id = chatId, type = "private" },
-                from = userId.HasValue ? new { id = userId.Value, is_bot = false, first_name = "user" } : null
+                from = userId.HasValue ? new { id = userId.Value, is_bot = false, first_name = "user" } : (object?)null
             }
         };
 
