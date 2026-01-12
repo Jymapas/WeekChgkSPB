@@ -28,7 +28,7 @@ public class EditPlaceCommandHandlerTests : IClassFixture<SqliteFixture>
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        posts.Insert(new Post { Id = 7, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 7, Title = "Title", Link = "https://example.com/post", Description = "desc" });
         announcements.Insert(new Announcement
         {
             Id = 7,
@@ -49,7 +49,7 @@ public class EditPlaceCommandHandlerTests : IClassFixture<SqliteFixture>
 
         var handler = new EditPlaceCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.EditPlace} 7 Новый клуб",
+            $"{BotCommands.EditPlace} https://example.com/post Новый клуб",
             announcements,
             posts,
             footers,

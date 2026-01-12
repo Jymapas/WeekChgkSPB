@@ -31,6 +31,12 @@ public class AnnouncementsRepository
                 cost INTEGER NOT NULL
             )";
         cmd.ExecuteNonQuery();
+        cmd.CommandText =
+            @"CREATE TABLE IF NOT EXISTS external_posts (
+                announcementId INTEGER PRIMARY KEY,
+                link TEXT NOT NULL UNIQUE
+            )";
+        cmd.ExecuteNonQuery();
     }
 
     public bool Exists(long id)
@@ -59,6 +65,35 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
     }
 
+    public void InsertExternal(Announcement a, string link)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var tx = connection.BeginTransaction();
+
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            @"INSERT INTO announcements (tournamentName, place, dateTimeUtc, cost)
+              VALUES (@name, @place, @dt, @cost)";
+        cmd.Parameters.AddWithValue("@name", a.TournamentName);
+        cmd.Parameters.AddWithValue("@place", a.Place);
+        cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
+        cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = "SELECT last_insert_rowid()";
+        a.Id = (long)cmd.ExecuteScalar()!;
+
+        cmd.CommandText = "INSERT INTO external_posts (announcementId, link) VALUES (@id, @link)";
+        cmd.Parameters.Clear();
+        cmd.Parameters.AddWithValue("@id", a.Id);
+        cmd.Parameters.AddWithValue("@link", link);
+        cmd.ExecuteNonQuery();
+
+        tx.Commit();
+    }
+
     public Announcement? Get(long id)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
@@ -69,6 +104,36 @@ public class AnnouncementsRepository
               FROM announcements
               WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
+
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+
+        var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
+        var dt = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal);
+
+        return new Announcement
+        {
+            Id = reader.GetInt64(0),
+            TournamentName = reader.GetString(1),
+            Place = place,
+            DateTimeUtc = dt,
+            Cost = reader.GetInt32(4)
+        };
+    }
+
+    public Announcement? GetByLink(string link)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost
+              FROM announcements AS a
+              LEFT JOIN posts AS p ON p.id = a.id
+              LEFT JOIN external_posts AS e ON e.announcementId = a.id
+              WHERE p.link = @link OR e.link = @link
+              LIMIT 1";
+        cmd.Parameters.AddWithValue("@link", link);
 
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
@@ -113,7 +178,18 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"DELETE FROM announcements WHERE dateTimeUtc < @threshold";
         cmd.Parameters.AddWithValue("@threshold", thresholdUtc.ToUniversalTime().ToString("O"));
-        return cmd.ExecuteNonQuery();
+        var removed = cmd.ExecuteNonQuery();
+
+        cmd.Parameters.Clear();
+        cmd.CommandText =
+            @"DELETE FROM external_posts
+              WHERE NOT EXISTS (
+                  SELECT 1 FROM announcements AS a
+                  WHERE a.id = external_posts.announcementId
+              )";
+        cmd.ExecuteNonQuery();
+
+        return removed;
     }
 
     public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime? toUtc = null)
@@ -124,9 +200,10 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         var toClause = toUtc is null ? string.Empty : " AND a.dateTimeUtc <= @to";
         cmd.CommandText =
-            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, p.link
+            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(p.link, e.link)
           FROM announcements AS a
-          JOIN posts AS p ON p.id = a.id
+          LEFT JOIN posts AS p ON p.id = a.id
+          LEFT JOIN external_posts AS e ON e.announcementId = a.id
           WHERE a.dateTimeUtc >= @from{toClause}
           ORDER BY a.dateTimeUtc, a.id;";
         cmd.Parameters.AddWithValue("@from", fromUtc.ToString("O"));
@@ -155,9 +232,16 @@ public class AnnouncementsRepository
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
+        using var tx = connection.BeginTransaction();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM announcements WHERE id=@id";
+        cmd.Transaction = tx;
+        cmd.CommandText = "DELETE FROM external_posts WHERE announcementId=@id";
         cmd.Parameters.AddWithValue("@id", id);
-        return cmd.ExecuteNonQuery() > 0;
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = "DELETE FROM announcements WHERE id=@id";
+        var removed = cmd.ExecuteNonQuery() > 0;
+        tx.Commit();
+        return removed;
     }
 }

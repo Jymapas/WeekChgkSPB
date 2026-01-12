@@ -71,10 +71,11 @@ public class BotCommandHelperTests
             "150"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out var announcement, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out var announcement, out var link, out var error);
 
         Assert.True(result);
-        Assert.Equal(100, announcement.Id);
+        Assert.Equal("https://chgk-spb.livejournal.com/100.html", link);
+        Assert.Equal(0, announcement.Id);
         Assert.Equal("Турнир", announcement.TournamentName);
         Assert.Equal("Клуб", announcement.Place);
         Assert.Equal(150, announcement.Cost);
@@ -86,7 +87,7 @@ public class BotCommandHelperTests
     {
         var lines = string.Join('\n', new[]
         {
-            "101",
+            "https://example.com/post/101",
             "Турнир",
             "Клуб",
             "22 сентября",
@@ -94,10 +95,10 @@ public class BotCommandHelperTests
             "200"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out var announcement, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out var announcement, out var link, out var error);
 
         Assert.True(result);
-        Assert.Equal(101, announcement.Id);
+        Assert.Equal("https://example.com/post/101", link);
         Assert.Equal(200, announcement.Cost);
         Assert.Equal(string.Empty, error);
     }
@@ -116,7 +117,7 @@ public class BotCommandHelperTests
             "f"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out _, out var error);
 
         Assert.False(result);
         Assert.Contains("Ожидаю 5 или 6 строк", error, StringComparison.OrdinalIgnoreCase);
@@ -134,7 +135,7 @@ public class BotCommandHelperTests
             "100"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out _, out var error);
 
         Assert.False(result);
         Assert.Contains("название", error, StringComparison.OrdinalIgnoreCase);
@@ -152,7 +153,7 @@ public class BotCommandHelperTests
             "abc"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out _, out var error);
 
         Assert.False(result);
         Assert.Contains("стоимость", error, StringComparison.OrdinalIgnoreCase);
@@ -169,7 +170,7 @@ public class BotCommandHelperTests
             "2025-08-10T19:30"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out _, out var error);
 
         Assert.False(result);
         Assert.Contains("Нужно передать 5 или 6 строк", error, StringComparison.OrdinalIgnoreCase);

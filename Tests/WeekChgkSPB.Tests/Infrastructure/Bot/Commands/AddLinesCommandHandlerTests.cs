@@ -42,7 +42,7 @@ public class AddLinesCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Equal(AddStep.WaitingId, state!.Step);
         Assert.Equal(0, state.Draft.Id);
         Assert.Single(sent);
-        Assert.Contains("id поста", sent[0]);
+        Assert.Contains("ссылку", sent[0]);
     }
 
     [Fact]

@@ -28,7 +28,7 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        posts.Insert(new Post { Id = 9, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 9, Title = "Title", Link = "https://example.com/post-9", Description = "desc" });
         var originalUtc = new DateTime(2025, 1, 5, 12, 0, 0, DateTimeKind.Utc);
         announcements.Insert(new Announcement
         {
@@ -50,7 +50,7 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
 
         var handler = new EditDateTimeCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.EditDateTime} 9 2025-08-10T19:30:00Z",
+            $"{BotCommands.EditDateTime} https://example.com/post-9 2025-08-10T19:30:00Z",
             announcements,
             posts,
             footers,
@@ -80,7 +80,7 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
-        posts.Insert(new Post { Id = 11, Title = "Title", Link = "link", Description = "desc" });
+        posts.Insert(new Post { Id = 11, Title = "Title", Link = "https://example.com/post-11", Description = "desc" });
         var originalUtc = new DateTime(2025, 2, 1, 15, 0, 0, DateTimeKind.Utc);
         announcements.Insert(new Announcement
         {
@@ -98,7 +98,7 @@ public class EditDateTimeCommandHandlerTests : IClassFixture<SqliteFixture>
 
         var handler = new EditDateTimeCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.EditDateTime} 11 не-дата",
+            $"{BotCommands.EditDateTime} https://example.com/post-11 не-дата",
             announcements,
             posts,
             footers,
