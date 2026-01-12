@@ -182,8 +182,17 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
         var posts = _fixture.CreatePostsRepository();
         var announcements = _fixture.CreateAnnouncementsRepository();
         var footers = _fixture.CreateFootersRepository();
+        var userManagement = _fixture.CreateUserManagementRepository();
 
         var botMock = new Mock<ITelegramBotClient>();
+        var channelPostUpdaterMock = new Mock<IChannelPostUpdater>();
+        var moderationHandler = new ModerationHandler(
+            botMock.Object,
+            announcements,
+            userManagement,
+            posts,
+            channelPostUpdaterMock.Object,
+            adminChatId: 1);
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -196,6 +205,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             posts,
             announcements,
             footers,
+            userManagement,
+            moderationHandler,
             helper,
             stateStore,
             new IBotCommandHandler[] { handler },
@@ -217,8 +228,17 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
         var posts = _fixture.CreatePostsRepository();
         var announcements = _fixture.CreateAnnouncementsRepository();
         var footers = _fixture.CreateFootersRepository();
+        var userManagement = _fixture.CreateUserManagementRepository();
 
         var botMock = new Mock<ITelegramBotClient>();
+        var channelPostUpdaterMock = new Mock<IChannelPostUpdater>();
+        var moderationHandler = new ModerationHandler(
+            botMock.Object,
+            announcements,
+            userManagement,
+            posts,
+            channelPostUpdaterMock.Object,
+            adminChatId: 1);
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -231,6 +251,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             posts,
             announcements,
             footers,
+            userManagement,
+            moderationHandler,
             helper,
             stateStore,
             new IBotCommandHandler[] { handler },
