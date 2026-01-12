@@ -34,6 +34,7 @@ internal class Program
         var services = scope.ServiceProvider;
 
         var repo = services.GetRequiredService<PostsRepository>();
+        var announcementsRepo = services.GetRequiredService<AnnouncementsRepository>();
         var fetcher = services.GetRequiredService<RssFetcher>();
         var notifier = services.GetRequiredService<INotifier>();
         var botRunner = services.GetRequiredService<BotRunner>();
@@ -75,7 +76,7 @@ internal class Program
             cancellationToken: cts.Token);
         botRunner.Start(cts.Token);
 
-        await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+        await CheckOnceAsync(fetcher, repo, announcementsRepo, notifier, cts.Token);
         var lastRssCheck = DateTime.UtcNow;
 
         if (scheduler is not null)
@@ -90,7 +91,7 @@ internal class Program
             {
                 if (DateTime.UtcNow - lastRssCheck >= TimeSpan.FromHours(1))
                 {
-                    await CheckOnceAsync(fetcher, repo, notifier, cts.Token);
+                    await CheckOnceAsync(fetcher, repo, announcementsRepo, notifier, cts.Token);
                     lastRssCheck = DateTime.UtcNow;
                 }
 
@@ -108,7 +109,7 @@ internal class Program
         await host.StopAsync();
     }
 
-    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, INotifier notifier,
+    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, AnnouncementsRepository announcementsRepo, INotifier notifier,
         CancellationToken ct)
     {
         try
@@ -119,7 +120,7 @@ internal class Program
                 .Select(p => p.Id)
                 .ToList();
 
-            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id)))
+            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id) && !announcementsRepo.Exists(p.Id)))
             {
                 repo.Insert(post);
                 Console.WriteLine($"New post: {post.Id} — {post.Title}");
