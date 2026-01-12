@@ -20,7 +20,15 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton(new FootersRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementsRepository(settings.DbPath));
         services.AddSingleton(new ChannelPostsRepository(settings.DbPath));
+        services.AddSingleton(new UserManagementRepository(settings.DbPath));
         services.AddSingleton(new RssFetcher(rssUrl));
+        services.AddSingleton(sp => new ModerationHandler(
+            sp.GetRequiredService<ITelegramBotClient>(),
+            sp.GetRequiredService<AnnouncementsRepository>(),
+            sp.GetRequiredService<UserManagementRepository>(),
+            sp.GetRequiredService<PostsRepository>(),
+            sp.GetRequiredService<IChannelPostUpdater>(),
+            settings.ChatId));
         services.AddSingleton<INotifier>(_ => new TelegramNotifier(settings.BotToken, settings.ChatId));
         services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
         services.AddSingleton<BotConversationState>();
@@ -66,6 +74,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<PostsRepository>(),
             sp.GetRequiredService<AnnouncementsRepository>(),
             sp.GetRequiredService<FootersRepository>(),
+            sp.GetRequiredService<UserManagementRepository>(),
+            sp.GetRequiredService<ModerationHandler>(),
             sp.GetRequiredService<BotCommandHelper>(),
             sp.GetRequiredService<BotConversationState>(),
             sp.GetServices<IBotCommandHandler>(),

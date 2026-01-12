@@ -28,13 +28,49 @@ public class AnnouncementsRepository
                 tournamentName TEXT NOT NULL,
                 place TEXT,
                 dateTimeUtc TEXT NOT NULL,
-                cost INTEGER NOT NULL
+                cost INTEGER NOT NULL,
+                userId INTEGER
             )";
         cmd.ExecuteNonQuery();
+        
+        try
+        {
+            cmd.CommandText = "ALTER TABLE announcements ADD COLUMN userId INTEGER";
+            cmd.ExecuteNonQuery();
+        }
+        catch
+        {
+        }
+        
         cmd.CommandText =
             @"CREATE TABLE IF NOT EXISTS external_posts (
                 announcementId INTEGER PRIMARY KEY,
                 link TEXT NOT NULL UNIQUE
+            )";
+        cmd.ExecuteNonQuery();
+        
+        cmd.CommandText =
+            @"CREATE TABLE IF NOT EXISTS pending_announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tournamentName TEXT NOT NULL,
+                place TEXT,
+                dateTimeUtc TEXT NOT NULL,
+                cost INTEGER NOT NULL,
+                userId INTEGER NOT NULL,
+                link TEXT,
+                createdAt TEXT NOT NULL
+            )";
+        cmd.ExecuteNonQuery();
+        
+        cmd.CommandText =
+            @"CREATE TABLE IF NOT EXISTS allowed_users (
+                userId INTEGER PRIMARY KEY
+            )";
+        cmd.ExecuteNonQuery();
+        
+        cmd.CommandText =
+            @"CREATE TABLE IF NOT EXISTS banned_users (
+                userId INTEGER PRIMARY KEY
             )";
         cmd.ExecuteNonQuery();
     }
@@ -55,13 +91,14 @@ public class AnnouncementsRepository
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"INSERT INTO announcements (id, tournamentName, place, dateTimeUtc, cost)
-              VALUES (@id, @name, @place, @dt, @cost)";
+            @"INSERT INTO announcements (id, tournamentName, place, dateTimeUtc, cost, userId)
+              VALUES (@id, @name, @place, @dt, @cost, @userId)";
         cmd.Parameters.AddWithValue("@id", a.Id);
         cmd.Parameters.AddWithValue("@name", a.TournamentName);
         cmd.Parameters.AddWithValue("@place", a.Place);
         cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.Parameters.AddWithValue("@userId", a.UserId is null ? DBNull.Value : a.UserId);
         cmd.ExecuteNonQuery();
     }
 
@@ -74,12 +111,13 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText =
-            @"INSERT INTO announcements (tournamentName, place, dateTimeUtc, cost)
-              VALUES (@name, @place, @dt, @cost)";
+            @"INSERT INTO announcements (tournamentName, place, dateTimeUtc, cost, userId)
+              VALUES (@name, @place, @dt, @cost, @userId)";
         cmd.Parameters.AddWithValue("@name", a.TournamentName);
         cmd.Parameters.AddWithValue("@place", a.Place);
         cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.Parameters.AddWithValue("@userId", a.UserId is null ? DBNull.Value : a.UserId);
         cmd.ExecuteNonQuery();
 
         cmd.CommandText = "SELECT last_insert_rowid()";
@@ -100,7 +138,7 @@ public class AnnouncementsRepository
         connection.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT id, tournamentName, place, dateTimeUtc, cost
+            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId
               FROM announcements
               WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
@@ -110,6 +148,7 @@ public class AnnouncementsRepository
 
         var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
         var dt = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal);
+        var userId = reader.IsDBNull(5) ? null : (long?)reader.GetInt64(5);
 
         return new Announcement
         {
@@ -117,7 +156,8 @@ public class AnnouncementsRepository
             TournamentName = reader.GetString(1),
             Place = place,
             DateTimeUtc = dt,
-            Cost = reader.GetInt32(4)
+            Cost = reader.GetInt32(4),
+            UserId = userId
         };
     }
 
@@ -127,7 +167,7 @@ public class AnnouncementsRepository
         connection.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost
+            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, a.userId
               FROM announcements AS a
               LEFT JOIN posts AS p ON p.id = a.id
               LEFT JOIN external_posts AS e ON e.announcementId = a.id
@@ -140,6 +180,7 @@ public class AnnouncementsRepository
 
         var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
         var dt = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal);
+        var userId = reader.IsDBNull(5) ? null : (long?)reader.GetInt64(5);
 
         return new Announcement
         {
@@ -147,7 +188,8 @@ public class AnnouncementsRepository
             TournamentName = reader.GetString(1),
             Place = place,
             DateTimeUtc = dt,
-            Cost = reader.GetInt32(4)
+            Cost = reader.GetInt32(4),
+            UserId = userId
         };
     }
 
@@ -200,7 +242,7 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         var toClause = toUtc is null ? string.Empty : " AND a.dateTimeUtc <= @to";
         cmd.CommandText =
-            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(p.link, e.link)
+            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(p.link, e.link), a.userId
           FROM announcements AS a
           LEFT JOIN posts AS p ON p.id = a.id
           LEFT JOIN external_posts AS e ON e.announcementId = a.id
