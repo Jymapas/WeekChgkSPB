@@ -1,5 +1,7 @@
+using System;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Flows;
@@ -120,8 +122,58 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         }
 
         state.Draft.Cost = cost;
+        
+        var userId = context.Message.From?.Id;
+        var isAdmin = context.IsAdminChat;
+        var needsModeration = !isAdmin && userId.HasValue && 
+                              (context.UserManagement is null || !context.UserManagement.IsAllowed(userId.Value));
+        
+        if (needsModeration && userId.HasValue)
+        {
+            if (context.UserManagement is null || context.Moderation is null)
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Ошибка: система модерации недоступна", cancellationToken: context.CancellationToken);
+                return true;
+            }
+            
+            if (context.UserManagement.IsBanned(userId.Value))
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Вы заблокированы и не можете добавлять анонсы", cancellationToken: context.CancellationToken);
+                state.Step = AddStep.None;
+                context.StateStore.Remove(userId.Value);
+                return true;
+            }
+            
+            var pending = new PendingAnnouncement
+            {
+                TournamentName = state.Draft.TournamentName,
+                Place = state.Draft.Place,
+                DateTimeUtc = state.Draft.DateTimeUtc,
+                Cost = state.Draft.Cost,
+                UserId = userId.Value,
+                Link = state.Draft.Id > 0 ? null : state.DraftLink,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            var pendingId = context.UserManagement.AddPending(pending);
+            pending.Id = pendingId;
+            
+            var userName = context.Message.From?.Username is not null
+                ? $"@{context.Message.From.Username}"
+                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim();
+            
+            await context.Moderation.SendModerationRequest(pending, userId.Value, userName, context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, "Ваш анонс отправлен на модерацию", cancellationToken: context.CancellationToken);
+            
+            state.Step = AddStep.None;
+            context.StateStore.Remove(userId.Value);
+            state.Existing = null;
+            return true;
+        }
+        
         if (state.Draft.Id > 0)
         {
+            state.Draft.UserId = isAdmin ? null : userId;
             context.Announcements.Insert(state.Draft);
         }
         else
@@ -132,6 +184,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                 return true;
             }
 
+            state.Draft.UserId = isAdmin ? null : userId;
             context.Announcements.InsertExternal(state.Draft, state.DraftLink);
         }
         await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
@@ -159,13 +212,63 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
             return true;
         }
 
+        var userId = context.Message.From?.Id;
+        var isAdmin = context.IsAdminChat;
+        var needsModeration = !isAdmin && userId.HasValue && 
+                              (context.UserManagement is null || !context.UserManagement.IsAllowed(userId.Value));
+        
+        if (needsModeration && userId.HasValue)
+        {
+            if (context.UserManagement is null || context.Moderation is null)
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Ошибка: система модерации недоступна", cancellationToken: context.CancellationToken);
+                return true;
+            }
+            
+            if (context.UserManagement.IsBanned(userId.Value))
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Вы заблокированы и не можете добавлять анонсы", cancellationToken: context.CancellationToken);
+                context.StateStore.Remove(userId.Value);
+                context.Helper.ResetDraft(state);
+                return true;
+            }
+            
+            var pending = new PendingAnnouncement
+            {
+                TournamentName = announcement.TournamentName,
+                Place = announcement.Place,
+                DateTimeUtc = announcement.DateTimeUtc,
+                Cost = announcement.Cost,
+                UserId = userId.Value,
+                Link = link,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            var pendingId = context.UserManagement.AddPending(pending);
+            pending.Id = pendingId;
+            
+            var userName = context.Message.From?.Username is not null
+                ? $"@{context.Message.From.Username}"
+                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim();
+            
+            await context.Moderation.SendModerationRequest(pending, userId.Value, userName, context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, "Ваш анонс отправлен на модерацию", cancellationToken: context.CancellationToken);
+            
+            context.StateStore.Remove(userId.Value);
+            state.Existing = null;
+            context.Helper.ResetDraft(state);
+            return true;
+        }
+        
         if (context.Posts.TryGetIdByLink(link, out var id))
         {
             announcement.Id = id;
+            announcement.UserId = isAdmin ? null : userId;
             context.Announcements.Insert(announcement);
         }
         else
         {
+            announcement.UserId = isAdmin ? null : userId;
             context.Announcements.InsertExternal(announcement, link);
         }
 
