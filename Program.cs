@@ -120,9 +120,20 @@ internal class Program
                 .Select(p => p.Id)
                 .ToList();
 
-            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id) && !announcementsRepo.Exists(p.Id)))
+            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id)))
             {
+                var hasAnnouncement = announcementsRepo.Exists(post.Id);
+                if (!hasAnnouncement && !string.IsNullOrWhiteSpace(post.Link))
+                {
+                    hasAnnouncement = announcementsRepo.GetByLink(post.Link) is not null;
+                }
+
                 repo.Insert(post);
+                if (hasAnnouncement)
+                {
+                    continue;
+                }
+
                 Console.WriteLine($"New post: {post.Id} — {post.Title}");
                 try
                 {
