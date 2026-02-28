@@ -11,6 +11,7 @@ namespace WeekChgkSPB.Infrastructure.Bot;
 
 internal class BotRunner
 {
+    private const string BannedUserMessage = "Вы заблокированы и не можете пользоваться ботом";
     private readonly long _allowedChatId;
     private readonly ITelegramBotClient _bot;
     private readonly PostsRepository _posts;
@@ -72,6 +73,14 @@ internal class BotRunner
         var message = update.Message;
         if (message is null)
         {
+            return;
+        }
+
+        var from = message.From;
+        if (from is not null && _userManagement.IsBanned(from.Id))
+        {
+            _stateStore.Remove(from.Id);
+            await _bot.SendMessage(message.Chat.Id, BannedUserMessage, cancellationToken: ct);
             return;
         }
 
