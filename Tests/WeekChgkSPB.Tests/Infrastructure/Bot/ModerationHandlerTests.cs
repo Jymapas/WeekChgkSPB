@@ -139,15 +139,15 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
 
         Assert.True(userManagement.IsAllowed(777));
         Assert.Null(userManagement.GetPending(pending.Id));
-        Assert.Contains(sentMessages, text => text.Contains("✅ Пользователь получил разрешение"));
+        Assert.Contains(sentMessages, text => text.Contains("✅ Пользователь может постить без модерации"));
         Assert.Contains(sentMessages, text => text.Contains("Теперь вы можете добавлять анонсы без модерации."));
-        Assert.Contains(callbackAnswers, text => text == "Пользователь получил разрешение");
+        Assert.Contains(callbackAnswers, text => text == "Пользователь может постить без модерации");
         updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Theory]
     [InlineData("approve", "Пост одобрен", false)]
-    [InlineData("allow", "Пользователь получил разрешение", true)]
+    [InlineData("allow", "Пользователь может постить без модерации", true)]
     public async Task HandleCallbackQuery_KnownPostPendingWithLink_CanBeModerated(
         string action,
         string expectedAnswer,

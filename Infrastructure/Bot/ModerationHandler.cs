@@ -179,7 +179,7 @@ internal class ModerationHandler
             await _bot.EditMessageText(
                 callbackQuery.Message.Chat.Id,
                 callbackQuery.Message.MessageId,
-                $"✅ Пользователь получил разрешение\n\n{FormatPendingAnnouncement(pending, userInfo)}",
+                $"✅ Пользователь может постить без модерации\n\n{FormatPendingAnnouncement(pending, userInfo)}",
                 cancellationToken: ct);
         }
 
@@ -188,7 +188,7 @@ internal class ModerationHandler
             $"Ваш анонс \"{pending.TournamentName}\" был одобрен и добавлен. Теперь вы можете добавлять анонсы без модерации.",
             cancellationToken: ct);
 
-        await _bot.AnswerCallbackQuery(callbackQuery.Id, "Пользователь получил разрешение", cancellationToken: ct);
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, "Пользователь может постить без модерации", cancellationToken: ct);
     }
 
     private async Task HandleReject(PendingAnnouncement pending, CallbackQuery callbackQuery, CancellationToken ct)
@@ -251,12 +251,12 @@ internal class ModerationHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("✅ Одобрить", $"mod_approve_{pending.Id}"),
-                InlineKeyboardButton.WithCallbackData("✅ Разрешить", $"mod_allow_{pending.Id}")
+                InlineKeyboardButton.WithCallbackData("✅ Одобрить пост", $"mod_approve_{pending.Id}"),
+                InlineKeyboardButton.WithCallbackData("✅ Постить без модерации", $"mod_allow_{pending.Id}")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("❌ Отклонить", $"mod_reject_{pending.Id}"),
+                InlineKeyboardButton.WithCallbackData("❌ Отклонить пост", $"mod_reject_{pending.Id}"),
                 InlineKeyboardButton.WithCallbackData("🚫 Забанить", $"mod_ban_{pending.Id}")
             }
         });
