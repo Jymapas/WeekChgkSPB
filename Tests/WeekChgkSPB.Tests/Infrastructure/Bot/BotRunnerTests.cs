@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using Telegram.Bot;
+using Telegram.Bot.Requests.Abstractions;
 using Telegram.Bot.Types;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
@@ -263,6 +264,67 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
 
         await runner.HandleUpdate(botMock.Object, update, CancellationToken.None);
 
+        Assert.Equal(0, handler.CanHandleCallCount);
+        Assert.Equal(0, handler.HandleCallCount);
+        Assert.Equal(0, flow.HandleCallCount);
+    }
+
+    [Fact]
+    public async Task HandleUpdate_BannedUserMessage_RespondsImmediatelyAndSkipsHandlers()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+        var userManagement = _fixture.CreateUserManagementRepository();
+        userManagement.BanUser(10);
+
+        var sentMessages = new List<string>();
+        var botMock = new Mock<ITelegramBotClient>();
+        botMock
+            .Setup(b => b.SendRequest<Message>(It.IsAny<IRequest<Message>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IRequest<Message> request, CancellationToken _) =>
+            {
+                var text = request.GetType().GetProperty("Text")?.GetValue(request) as string ?? string.Empty;
+                sentMessages.Add(text);
+                return new Message { Text = text };
+            });
+
+        var channelPostUpdaterMock = new Mock<IChannelPostUpdater>();
+        var moderationHandler = new ModerationHandler(
+            botMock.Object,
+            announcements,
+            userManagement,
+            posts,
+            channelPostUpdaterMock.Object,
+            adminChatId: 1);
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        stateStore.AddOrUpdate(10).Step = AddStep.WaitingName;
+
+        var handler = new TestCommandHandler(canHandle: true);
+        var flow = new TrackingFlow(new[] { AddStep.WaitingName }) { HandleResult = true };
+
+        var runner = new BotRunner(
+            botMock.Object,
+            allowedChatId: 1,
+            posts,
+            announcements,
+            footers,
+            userManagement,
+            moderationHandler,
+            helper,
+            stateStore,
+            new IBotCommandHandler[] { handler },
+            new IConversationFlowHandler[] { flow });
+
+        var update = CreateUpdate(null, chatId: 999, userId: 10);
+
+        await runner.HandleUpdate(botMock.Object, update, CancellationToken.None);
+
+        Assert.Single(sentMessages);
+        Assert.Equal("Вы заблокированы и не можете пользоваться ботом", sentMessages[0]);
+        Assert.False(stateStore.TryGet(10, out _));
         Assert.Equal(0, handler.CanHandleCallCount);
         Assert.Equal(0, handler.HandleCallCount);
         Assert.Equal(0, flow.HandleCallCount);
