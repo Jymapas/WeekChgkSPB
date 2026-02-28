@@ -285,27 +285,6 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
     }
 
-    public int DeleteOlderThan(DateTime thresholdUtc)
-    {
-        using var connection = new SqliteConnection($"Data Source={_dbPath}");
-        connection.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"DELETE FROM announcements WHERE dateTimeUtc < @threshold";
-        cmd.Parameters.AddWithValue("@threshold", thresholdUtc.ToUniversalTime().ToString("O"));
-        var removed = cmd.ExecuteNonQuery();
-
-        cmd.Parameters.Clear();
-        cmd.CommandText =
-            @"DELETE FROM external_posts
-              WHERE NOT EXISTS (
-                  SELECT 1 FROM announcements AS a
-                  WHERE a.id = external_posts.announcementId
-              )";
-        cmd.ExecuteNonQuery();
-
-        return removed;
-    }
-
     public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime? toUtc = null)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");

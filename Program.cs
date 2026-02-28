@@ -218,21 +218,7 @@ internal class Program
             Console.WriteLine("Telegram channel scheduler disabled: TELEGRAM_CHANNEL_ID not set.");
         }
 
-        var retentionVar = Environment.GetEnvironmentVariable("ANNOUNCEMENT_RETENTION_DAYS");
-        var retentionDays = 7;
-        if (!string.IsNullOrWhiteSpace(retentionVar))
-        {
-            if (int.TryParse(retentionVar, out var parsedRetention) && parsedRetention > 0)
-            {
-                retentionDays = parsedRetention;
-            }
-            else
-            {
-                Console.WriteLine("Invalid ANNOUNCEMENT_RETENTION_DAYS value, using default of 7.");
-            }
-        }
-
-        settings = new AppSettings(dbPath, token, chatId, channelId, scheduleOptions, retentionDays);
+        settings = new AppSettings(dbPath, token, chatId, channelId, scheduleOptions);
         return true;
     }
 

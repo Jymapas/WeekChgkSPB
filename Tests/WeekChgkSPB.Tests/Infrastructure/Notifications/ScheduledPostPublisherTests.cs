@@ -62,12 +62,10 @@ public class ScheduledPostPublisherTests : IClassFixture<SqliteFixture>
             announcements,
             footers,
             history,
-            posts,
             botMock.Object,
             channelId: "-100123",
             options,
-            tz,
-            announcementRetentionDays: 7);
+            tz);
 
         var beforeUtc = new DateTime(2025, 1, 6, 6, 59, 0, DateTimeKind.Utc);
         await publisher.TryPublishAsync(beforeUtc, CancellationToken.None);
@@ -105,80 +103,12 @@ public class ScheduledPostPublisherTests : IClassFixture<SqliteFixture>
             announcements,
             footers,
             history,
-            posts,
             botMock.Object,
             channelId: "-100123",
             options,
-            tz,
-            announcementRetentionDays: 7);
+            tz);
 
         var dueUtc = new DateTime(2025, 1, 6, 7, 0, 0, DateTimeKind.Utc);
         await publisher.TryPublishAsync(dueUtc, CancellationToken.None);
-    }
-
-    [Fact]
-    public async Task TryPublishAsync_CleansUpStaleDataAfterPosting()
-    {
-        _fixture.Reset();
-        var posts = _fixture.CreatePostsRepository();
-        var announcements = _fixture.CreateAnnouncementsRepository();
-        var footers = _fixture.CreateFootersRepository();
-        var history = _fixture.CreateChannelPostsRepository();
-
-        var staleId = 201;
-        var currentId = 202;
-        var orphanId = 303;
-
-        posts.Insert(new Post { Id = staleId, Title = "Old", Link = "https://example.com/old", Description = "old desc" });
-        posts.Insert(new Post { Id = currentId, Title = "New", Link = "https://example.com/new", Description = "new desc" });
-        posts.Insert(new Post { Id = orphanId, Title = "Orphan", Link = "https://example.com/orphan", Description = "orphan desc" });
-
-        announcements.Insert(new Announcement
-        {
-            Id = staleId,
-            TournamentName = "Old Cup",
-            Place = "Somewhere",
-            DateTimeUtc = new DateTime(2024, 12, 20, 10, 0, 0, DateTimeKind.Utc),
-            Cost = 100
-        });
-        announcements.Insert(new Announcement
-        {
-            Id = currentId,
-            TournamentName = "Fresh Cup",
-            Place = "Downtown",
-            DateTimeUtc = new DateTime(2025, 1, 7, 10, 0, 0, DateTimeKind.Utc),
-            Cost = 200
-        });
-        footers.Insert("footer");
-
-        var botMock = new Mock<ITelegramBotClient>();
-        botMock
-            .Setup(b => b.SendRequest<Message>(It.IsAny<IRequest<Message>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Message { Text = "sent" });
-
-        var options = new ChannelPostScheduleOptions(
-            postsPerWeek: 1,
-            days: new[] { DayOfWeek.Monday },
-            timeOfDay: new TimeSpan(12, 0, 0));
-        var tz = TimeZoneInfo.CreateCustomTimeZone("UTC+5", TimeSpan.FromHours(5), "UTC+5", "UTC+5");
-        var publisher = new ScheduledPostPublisher(
-            announcements,
-            footers,
-            history,
-            posts,
-            botMock.Object,
-            channelId: "-100123",
-            options,
-            tz,
-            announcementRetentionDays: 7);
-
-        var dueUtc = new DateTime(2025, 1, 6, 7, 0, 0, DateTimeKind.Utc);
-        await publisher.TryPublishAsync(dueUtc, CancellationToken.None);
-
-        Assert.False(announcements.Exists(staleId));
-        Assert.True(announcements.Exists(currentId));
-        Assert.True(posts.Exists(staleId));
-        Assert.True(posts.Exists(currentId));
-        Assert.True(posts.Exists(orphanId));
     }
 }
