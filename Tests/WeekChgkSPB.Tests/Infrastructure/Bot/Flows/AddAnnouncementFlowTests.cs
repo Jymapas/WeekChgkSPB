@@ -553,4 +553,84 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task HandleWaitingCost_NonAdminKnownPost_SavesPendingWithLinkForModeration()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+        var userManagement = _fixture.CreateUserManagementRepository();
+
+        posts.Insert(new Post
+        {
+            Id = 16,
+            Title = "title",
+            Link = "https://chgk-spb.livejournal.com/16.html",
+            Description = "desc"
+        });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 306;
+        const long chatId = 1006;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingCost;
+        state.Draft.Id = 16;
+        state.DraftLink = "https://chgk-spb.livejournal.com/16.html";
+        state.Draft.TournamentName = "Tournament";
+        state.Draft.Place = "Place";
+        state.Draft.DateTimeUtc = new DateTime(2025, 9, 2, 18, 0, 0, DateTimeKind.Utc);
+
+        var botMock = new Mock<ITelegramBotClient>();
+        botMock
+            .Setup(b => b.SendRequest<Message>(It.IsAny<Telegram.Bot.Requests.Abstractions.IRequest<Message>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Message());
+        botMock
+            .Setup(b => b.SendRequest<bool>(It.IsAny<Telegram.Bot.Requests.Abstractions.IRequest<bool>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var updater = new Mock<IChannelPostUpdater>();
+        updater
+            .Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var moderation = new ModerationHandler(
+            botMock.Object,
+            announcements,
+            userManagement,
+            posts,
+            updater.Object,
+            adminChatId: 1);
+
+        var context = FlowTestContextFactory.CreateContext(
+            botMock.Object,
+            "350",
+            chatId,
+            userId,
+            announcements,
+            posts,
+            footers,
+            stateStore,
+            helper,
+            isAdminChat: false,
+            userManagement: userManagement,
+            moderation: moderation);
+
+        var flow = new AddAnnouncementFlow(updater.Object);
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.False(announcements.Exists(16));
+        Assert.False(stateStore.TryGet(userId, out _));
+
+        var pending = userManagement.GetPending(1);
+        Assert.NotNull(pending);
+        Assert.Equal("https://chgk-spb.livejournal.com/16.html", pending!.Link);
+        Assert.Equal(userId, pending.UserId);
+
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
 }
