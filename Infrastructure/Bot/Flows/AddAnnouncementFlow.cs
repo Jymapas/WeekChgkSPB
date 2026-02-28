@@ -151,7 +151,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                 DateTimeUtc = state.Draft.DateTimeUtc,
                 Cost = state.Draft.Cost,
                 UserId = userId.Value,
-                Link = state.Draft.Id > 0 ? null : state.DraftLink,
+                Link = state.DraftLink,
                 CreatedAt = DateTime.UtcNow
             };
             
