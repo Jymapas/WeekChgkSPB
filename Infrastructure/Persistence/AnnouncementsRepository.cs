@@ -34,9 +34,70 @@ public class AnnouncementsRepository
         cmd.CommandText =
             @"CREATE TABLE IF NOT EXISTS external_posts (
                 announcementId INTEGER PRIMARY KEY,
-                link TEXT NOT NULL UNIQUE
+                link TEXT NOT NULL UNIQUE,
+                normalizedLink TEXT
             )";
         cmd.ExecuteNonQuery();
+
+        EnsureColumnExists(connection, "external_posts", "normalizedLink", "TEXT");
+        BackfillExternalNormalizedLinks(connection);
+    }
+
+    private static void EnsureColumnExists(SqliteConnection connection, string table, string column, string type)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table})";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var name = reader.GetString(1);
+            if (string.Equals(name, column, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        reader.Close();
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {type}";
+        alter.ExecuteNonQuery();
+    }
+
+    private static void BackfillExternalNormalizedLinks(SqliteConnection connection)
+    {
+        var rows = new List<(long Id, string Normalized)>();
+        using var select = connection.CreateCommand();
+        select.CommandText = @"SELECT announcementId, link FROM external_posts WHERE normalizedLink IS NULL OR normalizedLink = ''";
+        using (var reader = select.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var id = reader.GetInt64(0);
+                var link = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                rows.Add((id, LinkNormalizer.Normalize(link)));
+            }
+        }
+
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        using var update = connection.CreateCommand();
+        update.CommandText = "UPDATE external_posts SET normalizedLink=@normalized WHERE announcementId=@id";
+        var idParam = update.CreateParameter();
+        idParam.ParameterName = "@id";
+        update.Parameters.Add(idParam);
+        var normalizedParam = update.CreateParameter();
+        normalizedParam.ParameterName = "@normalized";
+        update.Parameters.Add(normalizedParam);
+
+        foreach (var row in rows)
+        {
+            idParam.Value = row.Id;
+            normalizedParam.Value = row.Normalized;
+            update.ExecuteNonQuery();
+        }
     }
 
     public bool Exists(long id)
@@ -85,10 +146,11 @@ public class AnnouncementsRepository
         cmd.CommandText = "SELECT last_insert_rowid()";
         a.Id = (long)cmd.ExecuteScalar()!;
 
-        cmd.CommandText = "INSERT INTO external_posts (announcementId, link) VALUES (@id, @link)";
+        cmd.CommandText = "INSERT INTO external_posts (announcementId, link, normalizedLink) VALUES (@id, @link, @normalizedLink)";
         cmd.Parameters.Clear();
         cmd.Parameters.AddWithValue("@id", a.Id);
         cmd.Parameters.AddWithValue("@link", link);
+        cmd.Parameters.AddWithValue("@normalizedLink", LinkNormalizer.Normalize(link));
         cmd.ExecuteNonQuery();
 
         tx.Commit();
@@ -123,6 +185,13 @@ public class AnnouncementsRepository
 
     public Announcement? GetByLink(string link)
     {
+        var raw = link?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        var normalized = LinkNormalizer.Normalize(raw);
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         using var cmd = connection.CreateCommand();
@@ -131,9 +200,13 @@ public class AnnouncementsRepository
               FROM announcements AS a
               LEFT JOIN posts AS p ON p.id = a.id
               LEFT JOIN external_posts AS e ON e.announcementId = a.id
-              WHERE p.link = @link OR e.link = @link
+              WHERE p.normalizedLink = @normalized
+                 OR p.link = @raw
+                 OR e.normalizedLink = @normalized
+                 OR e.link = @raw
               LIMIT 1";
-        cmd.Parameters.AddWithValue("@link", link);
+        cmd.Parameters.AddWithValue("@normalized", normalized);
+        cmd.Parameters.AddWithValue("@raw", raw);
 
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;

@@ -61,4 +61,27 @@ public class AnnouncementsRepositoryTests : IClassFixture<SqliteFixture>
         Assert.False(repo.Exists(42));
         Assert.Null(repo.Get(42));
     }
+
+    [Fact]
+    public void GetByLink_NormalizesTrackingParameters()
+    {
+        _fixture.Reset();
+        var repo = _fixture.CreateAnnouncementsRepository();
+        _ = _fixture.CreatePostsRepository();
+
+        var announcement = new Announcement
+        {
+            TournamentName = "Name",
+            Place = "Place",
+            DateTimeUtc = new DateTime(2025, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+            Cost = 100
+        };
+
+        repo.InsertExternal(announcement, "https://example.com/post?utm_source=a&b=1");
+
+        var fetched = repo.GetByLink("https://example.com/post?b=1");
+
+        Assert.NotNull(fetched);
+        Assert.Equal("Name", fetched!.TournamentName);
+    }
 }
