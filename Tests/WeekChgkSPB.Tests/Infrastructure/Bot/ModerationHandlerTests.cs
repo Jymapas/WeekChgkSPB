@@ -146,9 +146,9 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
     }
 
     [Theory]
-    [InlineData("approve", "Ошибка: отсутствует ссылка", false)]
-    [InlineData("allow", "Ошибка: отсутствует ссылка", true)]
-    public async Task HandleCallbackQuery_KnownPostPendingWithoutLink_CannotBeModerated(
+    [InlineData("approve", "Пост одобрен", false)]
+    [InlineData("allow", "Пользователь получил разрешение", true)]
+    public async Task HandleCallbackQuery_KnownPostPendingWithLink_CanBeModerated(
         string action,
         string expectedAnswer,
         bool userBecomesAllowed)
@@ -173,7 +173,7 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             DateTimeUtc = new DateTime(2025, 10, 1, 15, 0, 0, DateTimeKind.Utc),
             Cost = 500,
             UserId = 888,
-            Link = null,
+            Link = "https://chgk-spb.livejournal.com/99.html",
             CreatedAt = new DateTime(2025, 9, 1, 10, 0, 0, DateTimeKind.Utc)
         };
         pending.Id = userManagement.AddPending(pending);
@@ -199,12 +199,15 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             CancellationToken.None);
 
         Assert.True(handled);
-        Assert.Null(announcements.Get(99));
-        Assert.NotNull(userManagement.GetPending(pending.Id));
+        var inserted = announcements.Get(99);
+        Assert.NotNull(inserted);
+        Assert.Equal("Пошаговый анонс", inserted!.TournamentName);
+        Assert.Equal(888, inserted.UserId);
+        Assert.Null(userManagement.GetPending(pending.Id));
         Assert.Contains(callbackAnswers, text => text == expectedAnswer);
-        Assert.DoesNotContain(sentMessages, text => text.Contains("Ваш анонс"));
+        Assert.Contains(sentMessages, text => text.Contains("Ваш анонс"));
         Assert.Equal(userBecomesAllowed, userManagement.IsAllowed(888));
-        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static Mock<ITelegramBotClient> CreateBotMock(List<string> sentMessages, List<string> callbackAnswers)
