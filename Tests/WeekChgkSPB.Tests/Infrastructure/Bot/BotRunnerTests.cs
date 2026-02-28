@@ -177,7 +177,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleUpdate_IgnoresMessagesFromOtherChats()
+    public async Task HandleUpdate_ProcessesMessagesFromNonAdminChats()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
@@ -217,8 +217,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
 
         await runner.HandleUpdate(botMock.Object, update, CancellationToken.None);
 
-        Assert.Equal(0, handler.CanHandleCallCount);
-        Assert.Equal(0, handler.HandleCallCount);
+        Assert.Equal(1, handler.CanHandleCallCount);
+        Assert.Equal(1, handler.HandleCallCount);
         Assert.Equal(0, flow.HandleCallCount);
     }
 

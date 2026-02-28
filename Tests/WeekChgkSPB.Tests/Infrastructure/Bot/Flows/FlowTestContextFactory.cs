@@ -18,7 +18,10 @@ internal static class FlowTestContextFactory
         PostsRepository posts,
         FootersRepository footers,
         BotConversationState stateStore,
-        BotCommandHelper helper)
+        BotCommandHelper helper,
+        bool isAdminChat = true,
+        UserManagementRepository? userManagement = null,
+        ModerationHandler? moderation = null)
     {
         var messagePayload = new
         {
@@ -41,6 +44,9 @@ internal static class FlowTestContextFactory
             posts,
             footers,
             stateStore,
-            helper);
+            helper,
+            isAdminChat,
+            userManagement,
+            moderation);
     }
 }
