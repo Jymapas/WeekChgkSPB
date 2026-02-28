@@ -28,9 +28,70 @@ public class PostsRepository
                 id INTEGER PRIMARY KEY,
                 title TEXT,
                 link TEXT,
-                description TEXT
+                description TEXT,
+                normalizedLink TEXT
             )";
         cmd.ExecuteNonQuery();
+
+        EnsureColumnExists(connection, "posts", "normalizedLink", "TEXT");
+        BackfillNormalizedLinks(connection);
+    }
+
+    private static void EnsureColumnExists(SqliteConnection connection, string table, string column, string type)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table})";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var name = reader.GetString(1);
+            if (string.Equals(name, column, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        reader.Close();
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {type}";
+        alter.ExecuteNonQuery();
+    }
+
+    private static void BackfillNormalizedLinks(SqliteConnection connection)
+    {
+        var rows = new List<(long Id, string Normalized)>();
+        using var select = connection.CreateCommand();
+        select.CommandText = @"SELECT id, link FROM posts WHERE normalizedLink IS NULL OR normalizedLink = ''";
+        using (var reader = select.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var id = reader.GetInt64(0);
+                var link = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                rows.Add((id, LinkNormalizer.Normalize(link)));
+            }
+        }
+
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        using var update = connection.CreateCommand();
+        update.CommandText = "UPDATE posts SET normalizedLink=@normalized WHERE id=@id";
+        var idParam = update.CreateParameter();
+        idParam.ParameterName = "@id";
+        update.Parameters.Add(idParam);
+        var normalizedParam = update.CreateParameter();
+        normalizedParam.ParameterName = "@normalized";
+        update.Parameters.Add(normalizedParam);
+
+        foreach (var row in rows)
+        {
+            idParam.Value = row.Id;
+            normalizedParam.Value = row.Normalized;
+            update.ExecuteNonQuery();
+        }
     }
 
     public bool Exists(long id)
@@ -49,8 +110,11 @@ public class PostsRepository
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         var cmd = connection.CreateCommand();
-        cmd.CommandText = @"SELECT id FROM posts WHERE link=@link LIMIT 1";
-        cmd.Parameters.AddWithValue("@link", link);
+        var raw = link?.Trim() ?? string.Empty;
+        var normalized = LinkNormalizer.Normalize(raw);
+        cmd.CommandText = @"SELECT id FROM posts WHERE normalizedLink=@normalized OR link=@raw LIMIT 1";
+        cmd.Parameters.AddWithValue("@normalized", normalized);
+        cmd.Parameters.AddWithValue("@raw", raw);
         var result = cmd.ExecuteScalar();
         if (result is null || result is DBNull)
         {
@@ -67,11 +131,13 @@ public class PostsRepository
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         var cmd = connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO posts (id, title, link, description) VALUES (@id, @title, @link, @description)";
+        cmd.CommandText =
+            "INSERT INTO posts (id, title, link, description, normalizedLink) VALUES (@id, @title, @link, @description, @normalizedLink)";
         cmd.Parameters.AddWithValue("@id", post.Id);
         cmd.Parameters.AddWithValue("@title", post.Title);
         cmd.Parameters.AddWithValue("@link", post.Link);
         cmd.Parameters.AddWithValue("@description", post.Description);
+        cmd.Parameters.AddWithValue("@normalizedLink", LinkNormalizer.Normalize(post.Link));
         cmd.ExecuteNonQuery();
     }
 
