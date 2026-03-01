@@ -41,6 +41,7 @@ public class HelpCommandHandlerTests : IClassFixture<SqliteFixture>
 
         Assert.Single(sent);
         Assert.Contains("/help", sent[0]);
+        Assert.Contains("/cancel", sent[0]);
         Assert.Contains("/add", sent[0]);
         Assert.Contains("/delete", sent[0]);
         Assert.DoesNotContain("/makepost", sent[0]);

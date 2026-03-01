@@ -11,6 +11,7 @@ public static class BotCommands
     public const string Add = "/add";
     public const string AddLines = "/add_lines";
     public const string Help = "/help";
+    public const string Cancel = "/cancel";
     public const string Edit = "/edit";
     public const string EditName = "/edit_name";
     public const string EditPlace = "/edit_place";
@@ -33,6 +34,7 @@ public static class BotCommands
     public static readonly string[] User =
     [
         Help,
+        Cancel,
         Add,
         AddLines,
         Edit,
@@ -56,6 +58,7 @@ public static class BotCommands
         [Add] = "Добавить анонс единым блоком",
         [AddLines] = "Добавить анонс по шагам",
         [Help] = "Справка по командам",
+        [Cancel] = "Отменить текущее действие",
         [Edit] = "Редактировать анонс",
         [EditName] = "Изменить название анонса",
         [EditPlace] = "Изменить место проведения",

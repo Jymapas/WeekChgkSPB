@@ -8,6 +8,7 @@ internal class HelpCommandHandler : IBotCommandHandler
     private const string HelpText =
         "Доступные команды:\n" +
         "/help - показать эту справку\n" +
+        "/cancel - отменить текущее действие\n" +
         "/add - добавить анонс одним сообщением\n" +
         "/add_lines - добавить анонс по шагам\n" +
         "/edit - показать команды редактирования\n" +
