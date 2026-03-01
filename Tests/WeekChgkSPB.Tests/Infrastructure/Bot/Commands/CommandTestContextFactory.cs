@@ -19,7 +19,10 @@ internal static class CommandTestContextFactory
         BotCommandHelper helper,
         BotConversationState stateStore,
         long chatId = 1,
-        long? userId = 1)
+        long? userId = 1,
+        bool isAdminChat = true,
+        UserManagementRepository? userManagement = null,
+        ModerationHandler? moderation = null)
     {
         var messages = new List<string>();
         var botMock = new Mock<ITelegramBotClient>();
@@ -53,7 +56,10 @@ internal static class CommandTestContextFactory
             posts,
             footers,
             stateStore,
-            helper);
+            helper,
+            isAdminChat,
+            userManagement,
+            moderation);
 
         return (context, messages, botMock);
     }

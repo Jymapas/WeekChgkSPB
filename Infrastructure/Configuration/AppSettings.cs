@@ -7,8 +7,7 @@ internal sealed record AppSettings(
     string BotToken,
     long ChatId,
     string? ChannelId,
-    ChannelPostScheduleOptions? ScheduleOptions,
-    int AnnouncementRetentionDays)
+    ChannelPostScheduleOptions? ScheduleOptions)
 {
     public bool HasChannel => !string.IsNullOrEmpty(ChannelId);
     public bool HasScheduler => HasChannel && ScheduleOptions is not null;

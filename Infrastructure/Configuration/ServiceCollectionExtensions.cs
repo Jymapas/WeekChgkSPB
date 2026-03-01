@@ -20,7 +20,15 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton(new FootersRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementsRepository(settings.DbPath));
         services.AddSingleton(new ChannelPostsRepository(settings.DbPath));
+        services.AddSingleton(new UserManagementRepository(settings.DbPath));
         services.AddSingleton(new RssFetcher(rssUrl));
+        services.AddSingleton(sp => new ModerationHandler(
+            sp.GetRequiredService<ITelegramBotClient>(),
+            sp.GetRequiredService<AnnouncementsRepository>(),
+            sp.GetRequiredService<UserManagementRepository>(),
+            sp.GetRequiredService<PostsRepository>(),
+            sp.GetRequiredService<IChannelPostUpdater>(),
+            settings.ChatId));
         services.AddSingleton<INotifier>(_ => new TelegramNotifier(settings.BotToken, settings.ChatId));
         services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
         services.AddSingleton<BotConversationState>();
@@ -30,6 +38,8 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IConversationFlowHandler, FooterFlow>();
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
+        services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
+        services.AddSingleton<IBotCommandHandler, CancelCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddCommandHandler>();
         services.AddSingleton<IBotCommandHandler>(sp => new EditNameCommandHandler(
@@ -66,6 +76,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<PostsRepository>(),
             sp.GetRequiredService<AnnouncementsRepository>(),
             sp.GetRequiredService<FootersRepository>(),
+            sp.GetRequiredService<UserManagementRepository>(),
+            sp.GetRequiredService<ModerationHandler>(),
             sp.GetRequiredService<BotCommandHelper>(),
             sp.GetRequiredService<BotConversationState>(),
             sp.GetServices<IBotCommandHandler>(),
@@ -80,12 +92,10 @@ internal static class ServiceCollectionExtensions
                 sp.GetRequiredService<AnnouncementsRepository>(),
                 sp.GetRequiredService<FootersRepository>(),
                 sp.GetRequiredService<ChannelPostsRepository>(),
-                sp.GetRequiredService<PostsRepository>(),
                 sp.GetRequiredService<ITelegramBotClient>(),
                 channelId,
                 options,
-                TimeZoneInfo.Local,
-                settings.AnnouncementRetentionDays));
+                TimeZoneInfo.Local));
         }
 
         return services;

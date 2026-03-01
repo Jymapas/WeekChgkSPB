@@ -37,6 +37,16 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
             return;
         }
 
+        var userId = msg.From?.Id;
+        var isAdmin = context.IsAdminChat;
+        var canDelete = isAdmin || (userId.HasValue && existing.UserId == userId);
+
+        if (!canDelete)
+        {
+            await context.Bot.SendMessage(msg.Chat.Id, "Вы можете удалять только свои анонсы", cancellationToken: context.CancellationToken);
+            return;
+        }
+
         var deleted = context.Announcements.Delete(existing.Id);
         if (msg.From is not null)
         {

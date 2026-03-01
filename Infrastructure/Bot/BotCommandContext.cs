@@ -12,4 +12,7 @@ internal sealed record BotCommandContext(
     PostsRepository Posts,
     FootersRepository Footers,
     BotConversationState StateStore,
-    BotCommandHelper Helper);
+    BotCommandHelper Helper,
+    bool IsAdminChat = false,
+    UserManagementRepository? UserManagement = null,
+    ModerationHandler? Moderation = null);

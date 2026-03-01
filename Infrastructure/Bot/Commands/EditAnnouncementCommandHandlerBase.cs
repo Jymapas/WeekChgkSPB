@@ -55,6 +55,16 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
             return;
         }
 
+        var userId = msg.From?.Id;
+        var isAdmin = context.IsAdminChat;
+        var canEdit = isAdmin || (userId.HasValue && existing.UserId == userId);
+
+        if (!canEdit)
+        {
+            await context.Bot.SendMessage(msg.Chat.Id, "Вы можете редактировать только свои анонсы", cancellationToken: context.CancellationToken);
+            return;
+        }
+
         var hasInlineValue = parts.Length > 2;
         var inlineValue = hasInlineValue ? string.Join(' ', parts.Skip(2)) : null;
 
