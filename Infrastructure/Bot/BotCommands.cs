@@ -20,10 +20,17 @@ public static class BotCommands
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
 
-    public static readonly string[] All =
+    public static readonly string[] AdminOnly =
     [
         MakePostLJ,
         MakePost,
+        FooterAdd,
+        FooterList,
+        FooterDel,
+    ];
+
+    public static readonly string[] User =
+    [
         Add,
         AddLines,
         Edit,
@@ -32,9 +39,12 @@ public static class BotCommands
         EditDateTime,
         EditCost,
         Delete,
-        FooterAdd,
-        FooterList,
-        FooterDel,
+    ];
+
+    public static readonly string[] All =
+    [
+        ..User,
+        ..AdminOnly,
     ];
 
     private readonly static Dictionary<string, string> CustomDescriptions = new(StringComparer.OrdinalIgnoreCase)
@@ -54,8 +64,14 @@ public static class BotCommands
         [FooterDel] = "Удалить футер",
     };
 
-    public static IReadOnlyList<BotCommand> AsBotCommands() =>
-        All
+    public static IReadOnlyList<BotCommand> AsAdminBotCommands() => ToBotCommands(All);
+
+    public static IReadOnlyList<BotCommand> AsUserBotCommands() => ToBotCommands(User);
+
+    public static IReadOnlyList<BotCommand> AsBotCommands() => AsAdminBotCommands();
+
+    private static IReadOnlyList<BotCommand> ToBotCommands(IEnumerable<string> source) =>
+        source
             .Select(c =>
             {
                 var cmd = c.TrimStart('/');

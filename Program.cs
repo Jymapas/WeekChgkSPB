@@ -69,10 +69,20 @@ internal class Program
             }
         }
 
-        var commands = BotCommands.AsBotCommands();
+        await botClient.DeleteMyCommands(
+            scope: new BotCommandScopeAllGroupChats(),
+            cancellationToken: cts.Token);
+
+        var userCommands = BotCommands.AsUserBotCommands();
         await botClient.SetMyCommands(
-            commands: commands,
-            scope: BotCommandScope.AllGroupChats(),
+            commands: userCommands,
+            scope: new BotCommandScopeAllPrivateChats(),
+            cancellationToken: cts.Token);
+
+        var adminCommands = BotCommands.AsAdminBotCommands();
+        await botClient.SetMyCommands(
+            commands: adminCommands,
+            scope: new BotCommandScopeChat { ChatId = settings.ChatId },
             cancellationToken: cts.Token);
         botRunner.Start(cts.Token);
 
