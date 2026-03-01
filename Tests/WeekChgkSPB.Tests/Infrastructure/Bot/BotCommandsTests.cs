@@ -53,6 +53,7 @@ public class BotCommandsTests
     {
         var commands = BotCommands.AsUserBotCommands();
 
+        Assert.Contains(commands, c => c.Command == BotCommands.Help.TrimStart('/'));
         Assert.Contains(commands, c => c.Command == BotCommands.Add.TrimStart('/'));
         Assert.Contains(commands, c => c.Command == BotCommands.Delete.TrimStart('/'));
         Assert.DoesNotContain(commands, c => c.Command == BotCommands.MakePost.TrimStart('/'));

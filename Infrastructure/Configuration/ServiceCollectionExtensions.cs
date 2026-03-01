@@ -38,6 +38,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IConversationFlowHandler, FooterFlow>();
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
+        services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddCommandHandler>();
         services.AddSingleton<IBotCommandHandler>(sp => new EditNameCommandHandler(
