@@ -6,23 +6,23 @@ namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 internal class EditCostCommandHandler : EditAnnouncementCommandHandlerBase
 {
     public EditCostCommandHandler(IChannelPostUpdater channelPostUpdater)
-        : base(BotCommands.EditCost, AddStep.EditWaitingCost, "/edit_cost <ссылка|id> [новая стоимость]", channelPostUpdater)
+        : base(BotCommands.EditCost, AddStep.EditWaitingCost, Messages.Edit.CostUsage, channelPostUpdater)
     {
     }
 
     protected override string BuildPrompt(Announcement existing, BotCommandHelper helper)
     {
-        return $"Редактирование анонса {existing.Id}.\nТекущая стоимость: {existing.Cost}\nОтправь новую стоимость (целое число)";
+        return Messages.Edit.CostPrompt(existing.Id, existing.Cost);
     }
 
     protected override (bool Success, string Message) Apply(Announcement existing, string? inlineValue, BotCommandHelper helper)
     {
         if (!int.TryParse(inlineValue, out var cost))
         {
-            return (false, "Нужно целое число");
+            return (false, Messages.InvalidNumber);
         }
 
         existing.Cost = cost;
-        return (true, "Стоимость обновлена");
+        return (true, Messages.Edit.CostUpdated);
     }
 }

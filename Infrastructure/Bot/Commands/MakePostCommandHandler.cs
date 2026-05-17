@@ -29,7 +29,7 @@ internal class MakePostCommandHandler : IBotCommandHandler
         var rows = context.Announcements.GetWithLinksInRange(fromUtc, toUtc);
         if (rows.Count == 0)
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, "В выбранном диапазоне анонсов нет", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.MakePost.NoAnnouncements, cancellationToken: context.CancellationToken);
             return;
         }
 

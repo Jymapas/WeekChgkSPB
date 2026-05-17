@@ -25,7 +25,7 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
         var parts = msg.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length < 2)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Используй: /delete <ссылка|id>", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.Delete.Usage, cancellationToken: context.CancellationToken);
             return;
         }
 
@@ -33,7 +33,7 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
         var existing = context.Announcements.GetByLink(link);
         if (existing is null)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Анонс с такой ссылкой не найден", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.AnnouncementNotFound, cancellationToken: context.CancellationToken);
             return;
         }
 
@@ -43,7 +43,7 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
 
         if (!canDelete)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Вы можете удалять только свои анонсы", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.Delete.CannotDeleteOthers, cancellationToken: context.CancellationToken);
             return;
         }
 
@@ -60,7 +60,7 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
 
         await context.Bot.SendMessage(
             msg.Chat.Id,
-            $"Анонс ({existing.TournamentName}) удален: {link}",
+            Messages.Delete.Deleted(existing.TournamentName, link),
             cancellationToken: context.CancellationToken);
     }
 }

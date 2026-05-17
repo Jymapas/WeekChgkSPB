@@ -5,18 +5,6 @@ namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
 internal class HelpCommandHandler : IBotCommandHandler
 {
-    private const string HelpText =
-        "Доступные команды:\n" +
-        "/help - показать эту справку\n" +
-        "/cancel - отменить текущее действие\n" +
-        "/add - добавить анонс одним сообщением\n" +
-        "/add_lines - добавить анонс по шагам\n" +
-        "/edit - показать команды редактирования\n" +
-        "/edit_name - изменить название\n" +
-        "/edit_place - изменить место\n" +
-        "/edit_datetime - изменить дату и время\n" +
-        "/edit_cost - изменить стоимость\n" +
-        "/delete - удалить свой анонс";
 
     public bool CanHandle(BotCommandContext context)
     {
@@ -27,7 +15,7 @@ internal class HelpCommandHandler : IBotCommandHandler
     {
         await context.Bot.SendMessage(
             context.Message.Chat.Id,
-            HelpText,
+            Messages.Help.Text,
             cancellationToken: context.CancellationToken);
     }
 }

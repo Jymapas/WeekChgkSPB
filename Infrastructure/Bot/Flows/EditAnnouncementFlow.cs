@@ -31,37 +31,36 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
             {
                 if (string.IsNullOrWhiteSpace(context.Message.Text))
                 {
-                    return (false, "Название не может быть пустым");
+                    return (false, Messages.NameRequired);
                 }
 
                 existing.TournamentName = context.Message.Text.Trim();
-                return (true, "Название обновлено");
+                return (true, Messages.Edit.NameUpdated);
             }),
             AddStep.EditWaitingPlace => await HandleEdit(context, state, existing =>
             {
                 existing.Place = context.Message.Text?.Trim() ?? string.Empty;
-                return (true, "Место обновлено");
+                return (true, Messages.Edit.PlaceUpdated);
             }),
             AddStep.EditWaitingDateTime => await HandleEdit(context, state, existing =>
             {
                 if (!context.Helper.TryParseDateTime(context.Message.Text, out var parsedUtc))
                 {
-                    return (false,
-                        "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30");
+                    return (false, Messages.Edit.InvalidDateTime);
                 }
 
                 existing.DateTimeUtc = parsedUtc;
-                return (true, "Дата и время обновлены");
+                return (true, Messages.Edit.DateTimeUpdated);
             }),
             AddStep.EditWaitingCost => await HandleEdit(context, state, existing =>
             {
                 if (!int.TryParse(context.Message.Text, out var parsedCost))
                 {
-                    return (false, "Нужно целое число");
+                    return (false, Messages.InvalidNumber);
                 }
 
                 existing.Cost = parsedCost;
-                return (true, "Стоимость обновлена");
+                return (true, Messages.Edit.CostUpdated);
             }),
             _ => false
         };
@@ -75,7 +74,7 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
         if (state.Existing is null)
         {
             state.Step = AddStep.None;
-            await context.Bot.SendMessage(context.Message.Chat.Id, "Нет активного анонса для редактирования", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Edit.NoActiveAnnouncement, cancellationToken: context.CancellationToken);
             context.StateStore.Remove(context.Message.From!.Id);
             return true;
         }

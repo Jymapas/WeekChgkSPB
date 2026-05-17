@@ -22,6 +22,6 @@ internal class FooterAddCommandHandler : IBotCommandHandler
         state.Existing = null;
         state.Step = AddStep.FooterWaitingText;
 
-        await context.Bot.SendMessage(context.Message.Chat.Id, "Отправь одну строку HTML для футера", cancellationToken: context.CancellationToken);
+        await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Footer.Prompt, cancellationToken: context.CancellationToken);
     }
 }

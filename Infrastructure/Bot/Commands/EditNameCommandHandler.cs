@@ -6,23 +6,23 @@ namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 internal class EditNameCommandHandler : EditAnnouncementCommandHandlerBase
 {
     public EditNameCommandHandler(IChannelPostUpdater channelPostUpdater)
-        : base(BotCommands.EditName, AddStep.EditWaitingName, "/edit_name <ссылка|id> [новое название]", channelPostUpdater)
+        : base(BotCommands.EditName, AddStep.EditWaitingName, Messages.Edit.NameUsage, channelPostUpdater)
     {
     }
 
     protected override string BuildPrompt(Announcement existing, BotCommandHelper helper)
     {
-        return $"Редактирование анонса {existing.Id}.\nТекущее название: {existing.TournamentName}\nОтправь новое название";
+        return Messages.Edit.NamePrompt(existing.Id, existing.TournamentName);
     }
 
     protected override (bool Success, string Message) Apply(Announcement existing, string? inlineValue, BotCommandHelper helper)
     {
         if (string.IsNullOrWhiteSpace(inlineValue))
         {
-            return (false, "Название не может быть пустым");
+            return (false, Messages.NameRequired);
         }
 
         existing.TournamentName = inlineValue;
-        return (true, "Название обновлено");
+        return (true, Messages.Edit.NameUpdated);
     }
 }
