@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -31,7 +32,8 @@ internal class BotCommandHelper
     public string AddLinesPrompt =>
         "Отправь 5 или 6 строк: ссылка на пост (или id в ЖЖ), название турнира, место, дата и время по Петербургу " +
         "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
-        "стоимость (целое число).";
+        "стоимость (целое число).\n" +
+        "Несколько анонсов можно отправить одним сообщением — разделяй блоки пустой строкой.";
 
     public (DateTime FromUtc, DateTime? ToUtc) ResolveDateRangeOrDefault(string commandText)
     {
@@ -210,6 +212,38 @@ internal class BotCommandHelper
 
         error = string.Empty;
         return true;
+    }
+
+    public IReadOnlyList<string> SplitIntoBlocks(string content)
+    {
+        var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalized.Split('\n');
+
+        var blocks = new List<string>();
+        var current = new List<string>();
+
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                if (current.Count > 0)
+                {
+                    blocks.Add(string.Join('\n', current));
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Add(line);
+            }
+        }
+
+        if (current.Count > 0)
+        {
+            blocks.Add(string.Join('\n', current));
+        }
+
+        return blocks;
     }
 
     public void ResetDraft(AddAnnouncementState state)

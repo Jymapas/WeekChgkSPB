@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using WeekChgkSPB;
@@ -199,6 +201,15 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
     private async Task<bool> HandleWaitingLines(BotCommandContext context, AddAnnouncementState state)
     {
         var content = context.Message.Text ?? string.Empty;
+        var blocks = context.Helper.SplitIntoBlocks(content);
+        return blocks.Count > 1
+            ? await HandleMultipleBlocks(context, state, blocks)
+            : await HandleSingleBlock(context, state);
+    }
+
+    private async Task<bool> HandleSingleBlock(BotCommandContext context, AddAnnouncementState state)
+    {
+        var content = context.Message.Text ?? string.Empty;
         if (!context.Helper.TryBuildAnnouncementFromLines(content, out var announcement, out var link, out var error))
         {
             await context.Bot.SendMessage(context.Message.Chat.Id, error, cancellationToken: context.CancellationToken);
@@ -278,5 +289,127 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         state.Existing = null;
         context.Helper.ResetDraft(state);
         return true;
+    }
+
+    private async Task<bool> HandleMultipleBlocks(BotCommandContext context, AddAnnouncementState state, IReadOnlyList<string> blocks)
+    {
+        var userId = context.Message.From?.Id;
+        var isAdmin = context.IsAdminChat;
+        var needsModeration = !isAdmin && userId.HasValue &&
+                              (context.UserManagement is null || !context.UserManagement.IsAllowed(userId.Value));
+
+        if (needsModeration && userId.HasValue)
+        {
+            if (context.UserManagement is null || context.Moderation is null)
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Ошибка: система модерации недоступна", cancellationToken: context.CancellationToken);
+                ClearState(context, state);
+                return true;
+            }
+
+            if (context.UserManagement.IsBanned(userId.Value))
+            {
+                await context.Bot.SendMessage(context.Message.Chat.Id, "Вы заблокированы и не можете добавлять анонсы", cancellationToken: context.CancellationToken);
+                ClearState(context, state);
+                return true;
+            }
+        }
+
+        var savedCount = 0;
+        var moderatedCount = 0;
+        var errors = new List<string>();
+
+        var userName = userId.HasValue
+            ? (context.Message.From?.Username is not null
+                ? $"@{context.Message.From.Username}"
+                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim())
+            : string.Empty;
+
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            var blockLabel = $"Блок {i + 1}";
+
+            if (!context.Helper.TryBuildAnnouncementFromLines(blocks[i], out var announcement, out var link, out var error))
+            {
+                errors.Add($"{blockLabel}: {error}");
+                continue;
+            }
+
+            if (context.Announcements.GetByLink(link) is not null)
+            {
+                errors.Add($"{blockLabel}: анонс с такой ссылкой уже есть");
+                continue;
+            }
+
+            if (needsModeration && userId.HasValue)
+            {
+                var pending = new PendingAnnouncement
+                {
+                    TournamentName = announcement.TournamentName,
+                    Place = announcement.Place,
+                    DateTimeUtc = announcement.DateTimeUtc,
+                    Cost = announcement.Cost,
+                    UserId = userId.Value,
+                    Link = link,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var pendingId = context.UserManagement!.AddPending(pending);
+                pending.Id = pendingId;
+                await context.Moderation!.SendModerationRequest(pending, userId.Value, userName, context.CancellationToken);
+                moderatedCount++;
+            }
+            else
+            {
+                if (context.Posts.TryGetIdByLink(link, out var id))
+                {
+                    announcement.Id = id;
+                    announcement.UserId = isAdmin ? null : userId;
+                    context.Announcements.Insert(announcement);
+                }
+                else
+                {
+                    announcement.UserId = isAdmin ? null : userId;
+                    context.Announcements.InsertExternal(announcement, link);
+                }
+                savedCount++;
+            }
+        }
+
+        if (savedCount > 0)
+        {
+            await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
+        }
+
+        await context.Bot.SendMessage(context.Message.Chat.Id, BuildSummary(blocks.Count, savedCount, moderatedCount, errors), cancellationToken: context.CancellationToken);
+        ClearState(context, state);
+        return true;
+    }
+
+    private static string BuildSummary(int total, int saved, int moderated, List<string> errors)
+    {
+        var sb = new StringBuilder();
+
+        if (saved > 0)
+            sb.AppendLine($"Сохранено: {saved} из {total}.");
+        if (moderated > 0)
+            sb.AppendLine($"Отправлено на модерацию: {moderated} из {total}.");
+        if (errors.Count > 0)
+        {
+            sb.AppendLine($"Ошибки ({errors.Count}):");
+            foreach (var e in errors)
+                sb.AppendLine($"  — {e}");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private void ClearState(BotCommandContext context, AddAnnouncementState state)
+    {
+        var userId = context.Message.From?.Id;
+        if (userId.HasValue)
+            context.StateStore.Remove(userId.Value);
+        state.Existing = null;
+        context.Helper.ResetDraft(state);
     }
 }
