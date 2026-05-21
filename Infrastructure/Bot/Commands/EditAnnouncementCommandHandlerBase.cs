@@ -43,7 +43,7 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length < 2)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, $"Используй: {_usage}", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.Edit.Usage(_usage), cancellationToken: context.CancellationToken);
             return;
         }
 
@@ -51,7 +51,7 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
         var existing = context.Announcements.GetByLink(link);
         if (existing is null)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Анонс с такой ссылкой не найден", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.AnnouncementNotFound, cancellationToken: context.CancellationToken);
             return;
         }
 
@@ -61,7 +61,7 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
 
         if (!canEdit)
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Вы можете редактировать только свои анонсы", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.Edit.CannotEditOthers, cancellationToken: context.CancellationToken);
             return;
         }
 

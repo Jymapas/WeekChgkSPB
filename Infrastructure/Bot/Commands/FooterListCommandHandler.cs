@@ -18,7 +18,7 @@ internal class FooterListCommandHandler : IBotCommandHandler
         var all = context.Footers.ListAllDesc();
         if (all.Count == 0)
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, "Футер пуст", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Footer.Empty, cancellationToken: context.CancellationToken);
             return;
         }
 

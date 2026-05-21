@@ -17,11 +17,11 @@ internal class FooterDeleteCommandHandler : IBotCommandHandler
         var parts = msg.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length < 2 || !long.TryParse(parts[1], out var id))
         {
-            await context.Bot.SendMessage(msg.Chat.Id, "Используй: /footer_del <id>", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.Footer.UsageError, cancellationToken: context.CancellationToken);
             return;
         }
 
         context.Footers.Delete(id);
-        await context.Bot.SendMessage(msg.Chat.Id, "Удалено", cancellationToken: context.CancellationToken);
+        await context.Bot.SendMessage(msg.Chat.Id, Messages.Footer.Deleted, cancellationToken: context.CancellationToken);
     }
 }

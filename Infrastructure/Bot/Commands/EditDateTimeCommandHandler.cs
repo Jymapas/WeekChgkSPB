@@ -7,24 +7,24 @@ namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 internal class EditDateTimeCommandHandler : EditAnnouncementCommandHandlerBase
 {
     public EditDateTimeCommandHandler(IChannelPostUpdater channelPostUpdater)
-        : base(BotCommands.EditDateTime, AddStep.EditWaitingDateTime, "/edit_datetime <ссылка|id> [новая дата и время]", channelPostUpdater)
+        : base(BotCommands.EditDateTime, AddStep.EditWaitingDateTime, Messages.Edit.DateTimeUsage, channelPostUpdater)
     {
     }
 
     protected override string BuildPrompt(Announcement existing, BotCommandHelper helper)
     {
         var local = TimeZoneInfo.ConvertTimeFromUtc(existing.DateTimeUtc, PostFormatter.Moscow);
-        return $"Редактирование анонса {existing.Id}.\nТекущая дата и время (Москва): {local:yyyy-MM-dd HH:mm}\nОтправь новую дату и время по Москве";
+        return Messages.Edit.DateTimePrompt(existing.Id, local.ToString("yyyy-MM-dd HH:mm"));
     }
 
     protected override (bool Success, string Message) Apply(Announcement existing, string? inlineValue, BotCommandHelper helper)
     {
         if (!helper.TryParseDateTime(inlineValue, out var parsedUtc))
         {
-            return (false, "Неверный формат. Пример: 2025-08-10T19:30 (Москва)");
+            return (false, Messages.Edit.InvalidDateTimeShort);
         }
 
         existing.DateTimeUtc = parsedUtc;
-        return (true, "Дата и время обновлены");
+        return (true, Messages.Edit.DateTimeUpdated);
     }
 }

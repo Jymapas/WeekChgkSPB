@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -551,6 +552,265 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         Assert.Equal(AddStep.Done, state.Step);
         Assert.False(stateStore.TryGet(userId, out _));
         updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_MultiBlock_AllValid_InsertsAllAndCallsUpdaterOnce()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        posts.Insert(new Post { Id = 500, Title = "t", Link = "https://example.com/post-500", Description = "d" });
+        posts.Insert(new Post { Id = 501, Title = "t", Link = "https://example.com/post-501", Description = "d" });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 600;
+        const long chatId = 2000;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var payload = string.Join('\n', new[]
+        {
+            "https://example.com/post-500",
+            "Турнир А",
+            "Клуб А",
+            "2025-08-10T19:30",
+            "150",
+            "",
+            "https://example.com/post-501",
+            "Турнир Б",
+            "Клуб Б",
+            "2025-08-11T19:30",
+            "200"
+        });
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(botClient, payload, chatId, userId, announcements, posts, footers, stateStore, helper);
+
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.True(announcements.Exists(500));
+        Assert.True(announcements.Exists(501));
+        Assert.False(stateStore.TryGet(userId, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_MultiBlock_OneInvalid_SavesValidSkipsInvalid()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        posts.Insert(new Post { Id = 510, Title = "t", Link = "https://example.com/post-510", Description = "d" });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 601;
+        const long chatId = 2001;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var payload = string.Join('\n', new[]
+        {
+            "https://example.com/post-510",
+            "Турнир А",
+            "Клуб А",
+            "2025-08-10T19:30",
+            "150",
+            "",
+            "https://example.com/post-511",
+            "Турнир Б",
+            "Клуб Б",
+            "2025-08-11T19:30",
+            "не_число"  // invalid cost
+        });
+
+        var sentMessages = new List<string>();
+        var botMock = new Mock<ITelegramBotClient>();
+        botMock
+            .Setup(b => b.SendRequest<Message>(It.IsAny<Telegram.Bot.Requests.Abstractions.IRequest<Message>>(), It.IsAny<CancellationToken>()))
+            .Callback<Telegram.Bot.Requests.Abstractions.IRequest<Message>, CancellationToken>((req, _) =>
+            {
+                var text = (string?)req.GetType().GetProperty("Text")?.GetValue(req);
+                if (text is not null) sentMessages.Add(text);
+            })
+            .ReturnsAsync(new Message());
+
+        var context = FlowTestContextFactory.CreateContext(botMock.Object, payload, chatId, userId, announcements, posts, footers, stateStore, helper);
+
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.True(announcements.Exists(510));
+        Assert.False(stateStore.TryGet(userId, out _));
+        Assert.Contains(sentMessages, m => m.Contains("Блок 2", StringComparison.Ordinal));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_MultiBlock_OneDuplicate_SavesNonDuplicateReportsDuplicate()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        posts.Insert(new Post { Id = 520, Title = "t", Link = "https://example.com/post-520", Description = "d" });
+        posts.Insert(new Post { Id = 521, Title = "t", Link = "https://example.com/post-521", Description = "d" });
+        announcements.Insert(new Announcement
+        {
+            Id = 521,
+            TournamentName = "Existing",
+            Place = "Place",
+            DateTimeUtc = new DateTime(2025, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+            Cost = 100
+        });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 602;
+        const long chatId = 2002;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var payload = string.Join('\n', new[]
+        {
+            "https://example.com/post-520",
+            "Турнир А",
+            "Клуб А",
+            "2025-08-10T19:30",
+            "150",
+            "",
+            "https://example.com/post-521",
+            "Турнир Б",
+            "Клуб Б",
+            "2025-08-11T19:30",
+            "200"
+        });
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(botClient, payload, chatId, userId, announcements, posts, footers, stateStore, helper);
+
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.True(announcements.Exists(520));
+        Assert.Equal("Existing", announcements.Get(521)!.TournamentName);
+        Assert.False(stateStore.TryGet(userId, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_MultiBlock_AllFail_SendsErrorAndClearsState()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 603;
+        const long chatId = 2003;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var payload = "только\nтри\nстроки\n\nтоже\nмало\nстрок";
+
+        var botClient = TelegramBotClientStub.Create();
+        var context = FlowTestContextFactory.CreateContext(botClient, payload, chatId, userId, announcements, posts, footers, stateStore, helper);
+
+        var updater = new Mock<IChannelPostUpdater>();
+        var flow = new AddAnnouncementFlow(updater.Object);
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.False(stateStore.TryGet(userId, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleWaitingLines_MultiBlock_NonAdminUser_AllGoToModeration()
+    {
+        _fixture.Reset();
+        var posts = _fixture.CreatePostsRepository();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var footers = _fixture.CreateFootersRepository();
+        var userManagement = _fixture.CreateUserManagementRepository();
+
+        posts.Insert(new Post { Id = 530, Title = "t", Link = "https://chgk-spb.livejournal.com/530.html", Description = "d" });
+        posts.Insert(new Post { Id = 531, Title = "t", Link = "https://chgk-spb.livejournal.com/531.html", Description = "d" });
+
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+        const long userId = 604;
+        const long chatId = 2004;
+        var state = stateStore.AddOrUpdate(userId);
+        state.Step = AddStep.WaitingLines;
+
+        var payload = string.Join('\n', new[]
+        {
+            "530",
+            "Турнир А",
+            "Клуб А",
+            "2025-08-10T19:30",
+            "150",
+            "",
+            "531",
+            "Турнир Б",
+            "Клуб Б",
+            "2025-08-11T19:30",
+            "200"
+        });
+
+        var botMock = new Mock<ITelegramBotClient>();
+        botMock
+            .Setup(b => b.SendRequest<Message>(It.IsAny<Telegram.Bot.Requests.Abstractions.IRequest<Message>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Message());
+        botMock
+            .Setup(b => b.SendRequest<bool>(It.IsAny<Telegram.Bot.Requests.Abstractions.IRequest<bool>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var updater = new Mock<IChannelPostUpdater>();
+        updater.Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var moderation = new ModerationHandler(botMock.Object, announcements, userManagement, posts, updater.Object, adminChatId: 1);
+
+        var context = FlowTestContextFactory.CreateContext(botMock.Object, payload, chatId, userId, announcements, posts, footers, stateStore, helper, isAdminChat: false, userManagement: userManagement, moderation: moderation);
+
+        var flow = new AddAnnouncementFlow(updater.Object);
+
+        var handled = await flow.HandleAsync(context, state);
+
+        Assert.True(handled);
+        Assert.False(announcements.Exists(530));
+        Assert.False(announcements.Exists(531));
+        Assert.False(stateStore.TryGet(userId, out _));
+
+        var pending1 = userManagement.GetPending(1);
+        var pending2 = userManagement.GetPending(2);
+        Assert.NotNull(pending1);
+        Assert.NotNull(pending2);
+        Assert.Equal(userId, pending1!.UserId);
+        Assert.Equal(userId, pending2!.UserId);
+
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

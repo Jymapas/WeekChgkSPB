@@ -20,12 +20,12 @@ internal class FooterFlow : IConversationFlowHandler
         var html = context.Message.Text?.Trim();
         if (string.IsNullOrEmpty(html))
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, "Нужен непустой текст", cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Footer.TextRequired, cancellationToken: context.CancellationToken);
             return true;
         }
 
         var footerId = context.Footers.Insert(html);
-        await context.Bot.SendMessage(context.Message.Chat.Id, $"Футер добавлен с id={footerId}", cancellationToken: context.CancellationToken);
+        await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Footer.Added(footerId), cancellationToken: context.CancellationToken);
         state.Step = AddStep.Done;
         context.StateStore.Remove(context.Message.From!.Id);
         return true;

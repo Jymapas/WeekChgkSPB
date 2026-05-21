@@ -217,4 +217,56 @@ public class BotCommandHelperTests
 
         Assert.Equal(expected, result);
     }
+
+    [Fact]
+    public void SplitIntoBlocks_EmptyInput_ReturnsEmpty()
+    {
+        var blocks = _helper.SplitIntoBlocks(string.Empty);
+
+        Assert.Empty(blocks);
+    }
+
+    [Fact]
+    public void SplitIntoBlocks_SingleBlock_ReturnsSingleElement()
+    {
+        var input = "3375519\nB-52\nСолнечный день\n22 мая\n19:20\n2100";
+
+        var blocks = _helper.SplitIntoBlocks(input);
+
+        Assert.Single(blocks);
+        Assert.StartsWith("3375519", blocks[0]);
+    }
+
+    [Fact]
+    public void SplitIntoBlocks_TwoBlocksSeparatedByBlankLine_ReturnsTwoElements()
+    {
+        var input = "3375519\nB-52\nСолнечный день\n22 мая\n19:20\n2100\n\n123456\nДругой\nМесто\n23 мая\n19:20\n2100";
+
+        var blocks = _helper.SplitIntoBlocks(input);
+
+        Assert.Equal(2, blocks.Count);
+        Assert.StartsWith("3375519", blocks[0]);
+        Assert.StartsWith("123456", blocks[1]);
+    }
+
+    [Fact]
+    public void SplitIntoBlocks_TrailingAndLeadingBlankLines_Ignored()
+    {
+        var input = "\n\n3375519\nB-52\nМесто\n22 мая\n19:20\n2100\n\n";
+
+        var blocks = _helper.SplitIntoBlocks(input);
+
+        Assert.Single(blocks);
+        Assert.StartsWith("3375519", blocks[0]);
+    }
+
+    [Fact]
+    public void SplitIntoBlocks_MultipleConsecutiveBlankLines_TreatedAsSingleSeparator()
+    {
+        var input = "3375519\nB-52\nМесто\n22 мая\n19:20\n2100\n\n\n\n123456\nДругой\nМесто\n23 мая\n19:20\n2100";
+
+        var blocks = _helper.SplitIntoBlocks(input);
+
+        Assert.Equal(2, blocks.Count);
+    }
 }

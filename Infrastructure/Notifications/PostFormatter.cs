@@ -17,10 +17,10 @@ public static class PostFormatter
         IEnumerable<AnnouncementRow> rows,
         IEnumerable<string>? footerLines = null,
         DateTime? updatedAtLocal = null) =>
-        BuildSchedule(rows, footerLines, "Продолжаем вести список синхронов в Санкт-Петербурге.", updatedAtLocal);
+        BuildSchedule(rows, footerLines, Messages.Post.ScheduleHeader, updatedAtLocal);
 
     public static string BuildScheduleHtml(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines = null) =>
-        BuildSchedule(rows, footerLines, "Копия поста выкладывается в <a href=\"https://t.me/WeekChgkSPB\" rel=\"nofollow\">Телеграм-канал</a>.");
+        BuildSchedule(rows, footerLines, Messages.Post.LjHeader);
 
     public static string WrapAsCodeForTelegram(string html, int tgLimit = 4096)
     {
@@ -51,7 +51,7 @@ public static class PostFormatter
         sb.AppendLine(headerLine);
         if (updatedAtLocal is not null)
         {
-            sb.Append("Пост обновлён ")
+            sb.Append(Messages.Post.UpdatedAt)
                 .Append(updatedAtLocal.Value.ToString("dd.MM.yyyy", Ru))
                 .AppendLine();
         }

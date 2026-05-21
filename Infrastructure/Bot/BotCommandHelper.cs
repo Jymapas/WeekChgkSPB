@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -28,10 +29,7 @@ internal class BotCommandHelper
         _moscow = moscow;
     }
 
-    public string AddLinesPrompt =>
-        "Отправь 5 или 6 строк: ссылка на пост (или id в ЖЖ), название турнира, место, дата и время по Петербургу " +
-        "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
-        "стоимость (целое число).";
+    public string AddLinesPrompt => Messages.Add.LinesPrompt;
 
     public (DateTime FromUtc, DateTime? ToUtc) ResolveDateRangeOrDefault(string commandText)
     {
@@ -148,27 +146,27 @@ internal class BotCommandHelper
 
         if (lines.Count < 5)
         {
-            error = "Нужно передать 5 или 6 строк: ссылка или id, название, место, дата и время (одна строка ISO или две строки), стоимость.";
+            error = Messages.Add.TooFewLines;
             return false;
         }
 
         if (lines.Count > 6)
         {
-            error = "Ожидаю 5 или 6 строк без дополнительного текста.";
+            error = Messages.Add.TooManyLines;
             return false;
         }
 
         link = NormalizePostLink(lines[0]);
         if (string.IsNullOrWhiteSpace(link))
         {
-            error = "Первая строка — ссылка на пост или id в ЖЖ.";
+            error = Messages.Add.FirstLineMustBeLink;
             return false;
         }
 
         var name = lines[1];
         if (string.IsNullOrWhiteSpace(name))
         {
-            error = "Вторая строка должна содержать название турнира.";
+            error = Messages.Add.SecondLineMustBeName;
             return false;
         }
 
@@ -190,13 +188,13 @@ internal class BotCommandHelper
 
         if (!TryParseDateTime(dateTimeInput, out var dt))
         {
-            error = "Дата и время не распознаны. Пример: 2025-08-10T19:30 или 22 сентября\\n19:30.";
+            error = Messages.Add.DateTimeNotRecognized;
             return false;
         }
 
         if (!int.TryParse(costLine, out var cost))
         {
-            error = "Строка со стоимостью должна содержать целое число.";
+            error = Messages.Add.InvalidCost;
             return false;
         }
 
@@ -210,6 +208,38 @@ internal class BotCommandHelper
 
         error = string.Empty;
         return true;
+    }
+
+    public IReadOnlyList<string> SplitIntoBlocks(string content)
+    {
+        var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalized.Split('\n');
+
+        var blocks = new List<string>();
+        var current = new List<string>();
+
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                if (current.Count > 0)
+                {
+                    blocks.Add(string.Join('\n', current));
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Add(line);
+            }
+        }
+
+        if (current.Count > 0)
+        {
+            blocks.Add(string.Join('\n', current));
+        }
+
+        return blocks;
     }
 
     public void ResetDraft(AddAnnouncementState state)

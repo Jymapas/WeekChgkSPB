@@ -55,13 +55,13 @@ internal class ModerationHandler
         var pending = _userManagement.GetPending(pendingId);
         if (pending is null)
         {
-            await _bot.AnswerCallbackQuery(callbackQuery.Id, "Заявка не найдена", cancellationToken: ct);
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.RequestNotFound, cancellationToken: ct);
             if (callbackQuery.Message is not null)
             {
                 await _bot.EditMessageText(
                     callbackQuery.Message.Chat.Id,
                     callbackQuery.Message.MessageId,
-                    "Заявка уже обработана",
+                    Messages.Moderation.AlreadyProcessed,
                     cancellationToken: ct);
             }
             return true;
@@ -111,7 +111,7 @@ internal class ModerationHandler
         }
         else
         {
-            await _bot.AnswerCallbackQuery(callbackQuery.Id, "Ошибка: отсутствует ссылка", cancellationToken: ct);
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.LinkMissing, cancellationToken: ct);
             return;
         }
 
@@ -127,16 +127,16 @@ internal class ModerationHandler
             await _bot.EditMessageText(
                 callbackQuery.Message.Chat.Id,
                 callbackQuery.Message.MessageId,
-                $"✅ Пост одобрен\n\n{FormatPendingAnnouncement(pending, userInfo)}",
+                $"{Messages.Moderation.AdminApproved}\n\n{FormatPendingAnnouncement(pending, userInfo)}",
                 cancellationToken: ct);
         }
 
         await _bot.SendMessage(
             pending.UserId,
-            $"Ваш анонс \"{pending.TournamentName}\" был одобрен и добавлен",
+            Messages.Moderation.UserApproved(pending.TournamentName),
             cancellationToken: ct);
 
-        await _bot.AnswerCallbackQuery(callbackQuery.Id, "Пост одобрен", cancellationToken: ct);
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.Approved, cancellationToken: ct);
     }
 
     private async Task HandleAllow(PendingAnnouncement pending, CallbackQuery callbackQuery, CancellationToken ct)
@@ -163,7 +163,7 @@ internal class ModerationHandler
         }
         else
         {
-            await _bot.AnswerCallbackQuery(callbackQuery.Id, "Ошибка: отсутствует ссылка", cancellationToken: ct);
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.LinkMissing, cancellationToken: ct);
             return;
         }
 
@@ -179,16 +179,16 @@ internal class ModerationHandler
             await _bot.EditMessageText(
                 callbackQuery.Message.Chat.Id,
                 callbackQuery.Message.MessageId,
-                $"✅ Пользователь может постить без модерации\n\n{FormatPendingAnnouncement(pending, userInfo)}",
+                $"{Messages.Moderation.AdminAllowed}\n\n{FormatPendingAnnouncement(pending, userInfo)}",
                 cancellationToken: ct);
         }
 
         await _bot.SendMessage(
             pending.UserId,
-            $"Ваш анонс \"{pending.TournamentName}\" был одобрен и добавлен. Теперь вы можете добавлять анонсы без модерации.",
+            Messages.Moderation.UserAllowed(pending.TournamentName),
             cancellationToken: ct);
 
-        await _bot.AnswerCallbackQuery(callbackQuery.Id, "Пользователь может постить без модерации", cancellationToken: ct);
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.Allowed, cancellationToken: ct);
     }
 
     private async Task HandleReject(PendingAnnouncement pending, CallbackQuery callbackQuery, CancellationToken ct)
@@ -204,16 +204,16 @@ internal class ModerationHandler
             await _bot.EditMessageText(
                 callbackQuery.Message.Chat.Id,
                 callbackQuery.Message.MessageId,
-                $"❌ Пост отклонен\n\n{FormatPendingAnnouncement(pending, userInfo)}",
+                $"{Messages.Moderation.AdminRejected}\n\n{FormatPendingAnnouncement(pending, userInfo)}",
                 cancellationToken: ct);
         }
 
         await _bot.SendMessage(
             pending.UserId,
-            $"Ваш анонс \"{pending.TournamentName}\" был отклонен",
+            Messages.Moderation.UserRejected(pending.TournamentName),
             cancellationToken: ct);
 
-        await _bot.AnswerCallbackQuery(callbackQuery.Id, "Пост отклонен", cancellationToken: ct);
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.Rejected, cancellationToken: ct);
     }
 
     private async Task HandleBan(PendingAnnouncement pending, CallbackQuery callbackQuery, CancellationToken ct)
@@ -230,34 +230,33 @@ internal class ModerationHandler
             await _bot.EditMessageText(
                 callbackQuery.Message.Chat.Id,
                 callbackQuery.Message.MessageId,
-                $"🚫 Пользователь забанен\n\n{FormatPendingAnnouncement(pending, userInfo)}",
+                $"{Messages.Moderation.AdminBanned}\n\n{FormatPendingAnnouncement(pending, userInfo)}",
                 cancellationToken: ct);
         }
 
         await _bot.SendMessage(
             pending.UserId,
-            "Вы были заблокированы и больше не можете добавлять анонсы",
+            Messages.Moderation.UserBannedNotification,
             cancellationToken: ct);
 
-        await _bot.AnswerCallbackQuery(callbackQuery.Id, "Пользователь забанен", cancellationToken: ct);
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.Banned, cancellationToken: ct);
     }
 
     public async Task SendModerationRequest(PendingAnnouncement pending, long userId, string userName, CancellationToken ct)
     {
-        var userInfo = userName;
-        var text = $"Новая заявка на добавление анонса\n\n{FormatPendingAnnouncement(pending, userInfo)}";
+        var text = $"{Messages.Moderation.NewRequest}\n\n{FormatPendingAnnouncement(pending, userName)}";
 
         var keyboard = new InlineKeyboardMarkup(new[]
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("✅ Одобрить пост", $"mod_approve_{pending.Id}"),
-                InlineKeyboardButton.WithCallbackData("✅ Постить без модерации", $"mod_allow_{pending.Id}")
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonApprove, $"mod_approve_{pending.Id}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonAllow, $"mod_allow_{pending.Id}")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("❌ Отклонить пост", $"mod_reject_{pending.Id}"),
-                InlineKeyboardButton.WithCallbackData("🚫 Забанить", $"mod_ban_{pending.Id}")
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonReject, $"mod_reject_{pending.Id}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonBan, $"mod_ban_{pending.Id}")
             }
         });
 

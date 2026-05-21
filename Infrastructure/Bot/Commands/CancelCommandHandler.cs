@@ -20,7 +20,7 @@ internal class CancelCommandHandler : IBotCommandHandler
 
         await context.Bot.SendMessage(
             context.Message.Chat.Id,
-            "Текущее действие отменено",
+            Messages.Cancel.Cancelled,
             cancellationToken: context.CancellationToken);
     }
 }

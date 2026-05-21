@@ -13,7 +13,6 @@ internal class EditCommandHandler : IBotCommandHandler
 
     public async Task HandleAsync(BotCommandContext context)
     {
-        const string usage = "Используй команды: /edit_name, /edit_place, /edit_datetime, /edit_cost";
-        await context.Bot.SendMessage(context.Message.Chat.Id, usage, cancellationToken: context.CancellationToken);
+        await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Edit.HelpText, cancellationToken: context.CancellationToken);
     }
 }
