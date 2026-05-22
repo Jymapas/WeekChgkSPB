@@ -12,6 +12,7 @@ public class PendingAnnouncement
     public required string Place { get; set; }
     public DateTime DateTimeUtc { get; set; }
     public int Cost { get; set; }
+    public string? CostLabel { get; set; }
     public long UserId { get; set; }
     public string? Link { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -53,12 +54,21 @@ public class UserManagementRepository
                 userId INTEGER PRIMARY KEY
             )";
         cmd.ExecuteNonQuery();
-        
+
         cmd.CommandText =
             @"CREATE TABLE IF NOT EXISTS banned_users (
                 userId INTEGER PRIMARY KEY
             )";
         cmd.ExecuteNonQuery();
+
+        try
+        {
+            cmd.CommandText = "ALTER TABLE pending_announcements ADD COLUMN cost_text TEXT";
+            cmd.ExecuteNonQuery();
+        }
+        catch
+        {
+        }
     }
 
     public bool IsAllowed(long userId)
@@ -115,12 +125,13 @@ public class UserManagementRepository
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"INSERT INTO pending_announcements (tournamentName, place, dateTimeUtc, cost, userId, link, createdAt)
-              VALUES (@name, @place, @dt, @cost, @userId, @link, @createdAt)";
+            @"INSERT INTO pending_announcements (tournamentName, place, dateTimeUtc, cost, cost_text, userId, link, createdAt)
+              VALUES (@name, @place, @dt, @cost, @costText, @userId, @link, @createdAt)";
         cmd.Parameters.AddWithValue("@name", pending.TournamentName);
         cmd.Parameters.AddWithValue("@place", pending.Place);
         cmd.Parameters.AddWithValue("@dt", pending.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", pending.Cost);
+        cmd.Parameters.AddWithValue("@costText", pending.CostLabel is null ? DBNull.Value : pending.CostLabel);
         cmd.Parameters.AddWithValue("@userId", pending.UserId);
         cmd.Parameters.AddWithValue("@link", pending.Link is null ? DBNull.Value : pending.Link);
         cmd.Parameters.AddWithValue("@createdAt", pending.CreatedAt.ToUniversalTime().ToString("O"));
@@ -136,19 +147,20 @@ public class UserManagementRepository
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId, link, createdAt
+            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId, link, createdAt, cost_text
               FROM pending_announcements
               WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
-        
+
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
-        
+
         var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
         var dt = DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.AdjustToUniversal);
         var link = reader.IsDBNull(6) ? null : reader.GetString(6);
         var createdAt = DateTime.Parse(reader.GetString(7), null, System.Globalization.DateTimeStyles.AdjustToUniversal);
-        
+        var costLabel = reader.IsDBNull(8) ? null : reader.GetString(8);
+
         return new PendingAnnouncement
         {
             Id = reader.GetInt64(0),
@@ -156,6 +168,7 @@ public class UserManagementRepository
             Place = place,
             DateTimeUtc = dt,
             Cost = reader.GetInt32(4),
+            CostLabel = costLabel,
             UserId = reader.GetInt64(5),
             Link = link,
             CreatedAt = createdAt

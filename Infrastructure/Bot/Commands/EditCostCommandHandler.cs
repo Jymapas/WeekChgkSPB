@@ -12,17 +12,19 @@ internal class EditCostCommandHandler : EditAnnouncementCommandHandlerBase
 
     protected override string BuildPrompt(Announcement existing, BotCommandHelper helper)
     {
-        return Messages.Edit.CostPrompt(existing.Id, existing.Cost);
+        return Messages.Edit.CostPrompt(existing.Id, existing.Cost, existing.CostLabel);
     }
 
     protected override (bool Success, string Message) Apply(Announcement existing, string? inlineValue, BotCommandHelper helper)
     {
-        if (!int.TryParse(inlineValue, out var cost))
+        if (string.IsNullOrWhiteSpace(inlineValue))
         {
             return (false, Messages.InvalidNumber);
         }
 
+        var (cost, costLabel) = BotCommandHelper.ParseCost(inlineValue);
         existing.Cost = cost;
+        existing.CostLabel = costLabel;
         return (true, Messages.Edit.CostUpdated);
     }
 }

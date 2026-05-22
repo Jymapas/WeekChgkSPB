@@ -68,7 +68,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleAsync_InvalidInlineValue_SetsStateAndPrompts()
+    public async Task HandleAsync_TextInlineValue_UpdatesCostLabelAndClearsState()
     {
         _fixture.Reset();
         var announcements = _fixture.CreateAnnouncementsRepository();
@@ -94,7 +94,7 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
 
         var handler = new EditCostCommandHandler(updater.Object);
         var (context, sentMessages, _) = CommandTestContextFactory.Create(
-            $"{BotCommands.EditCost} https://example.com/post-14 notanumber",
+            $"{BotCommands.EditCost} https://example.com/post-14 бесплатно",
             announcements,
             posts,
             footers,
@@ -103,16 +103,13 @@ public class EditCostCommandHandlerTests : IClassFixture<SqliteFixture>
 
         await handler.HandleAsync(context);
 
-        Assert.Equal(2, sentMessages.Count);
-        Assert.Contains("Нужно целое число", sentMessages[0]);
-        Assert.Contains("Редактирование анонса", sentMessages[1]);
-
-        Assert.True(stateStore.TryGet(1, out var state));
-        Assert.NotNull(state);
-        Assert.Equal(AddStep.EditWaitingCost, state!.Step);
-        Assert.NotNull(state.Existing);
-        Assert.Equal(14, state.Existing!.Id);
-        Assert.Equal(300, announcements.Get(14)!.Cost);
-        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        var updated = announcements.Get(14);
+        Assert.NotNull(updated);
+        Assert.Equal(0, updated!.Cost);
+        Assert.Equal("бесплатно", updated.CostLabel);
+        Assert.Single(sentMessages);
+        Assert.Equal("Стоимость обновлена", sentMessages[0]);
+        Assert.False(stateStore.TryGet(1, out _));
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

@@ -48,20 +48,20 @@ internal static class Messages
         internal const string PromptDateTime =
             "Дата и время по Москве. Можно отправить ISO (пример: 2025-08-10T19:30) " +
             "или двумя строками: дата (например, 22 сентября) и новой строкой время (например, 19:30)";
-        internal const string PromptCost = "Стоимость (целое число)";
+        internal const string PromptCost = "Стоимость (число или текст, например: 150, бесплатно, донат)";
         internal const string InvalidDateTime = "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30";
         internal const string ExternalLinkRequired = "Нужна ссылка на пост";
         internal const string LinesPrompt =
             "Отправь 5 или 6 строк: ссылка на пост (или id в ЖЖ), название турнира, место, дата и время по Петербургу " +
             "(можно в формате 2025-08-10T19:30 или двумя строками — например, 22 сентября и 19:30), " +
-            "стоимость (целое число).\n" +
+            "стоимость (число или текст: бесплатно, донат).\n" +
             "Несколько анонсов можно отправить одним сообщением — разделяй блоки пустой строкой.";
         internal const string TooFewLines = "Нужно передать 5 или 6 строк: ссылка или id, название, место, дата и время (одна строка ISO или две строки), стоимость.";
         internal const string TooManyLines = "Ожидаю 5 или 6 строк без дополнительного текста.";
         internal const string FirstLineMustBeLink = "Первая строка — ссылка на пост или id в ЖЖ.";
         internal const string SecondLineMustBeName = "Вторая строка должна содержать название турнира.";
         internal const string DateTimeNotRecognized = "Дата и время не распознаны. Пример: 2025-08-10T19:30 или 22 сентября\\n19:30.";
-        internal const string InvalidCost = "Строка со стоимостью должна содержать целое число.";
+        internal const string InvalidCost = "Стоимость не может быть пустой.";
 
         internal static string MultiSavedCount(int saved, int total) => $"Сохранено: {saved} из {total}.";
         internal static string MultiModeratedCount(int moderated, int total) => $"Отправлено на модерацию: {moderated} из {total}.";
@@ -92,8 +92,8 @@ internal static class Messages
             $"Редактирование анонса {id}.\nТекущее место: {currentPlace}\nОтправь новое место";
         internal static string DateTimePrompt(long id, string currentDateTime) =>
             $"Редактирование анонса {id}.\nТекущая дата и время (Москва): {currentDateTime}\nОтправь новую дату и время по Москве";
-        internal static string CostPrompt(long id, int currentCost) =>
-            $"Редактирование анонса {id}.\nТекущая стоимость: {currentCost}\nОтправь новую стоимость (целое число)";
+        internal static string CostPrompt(long id, int currentCost, string? costLabel = null) =>
+            $"Редактирование анонса {id}.\nТекущая стоимость: {costLabel ?? $"{currentCost} р."}\nОтправь новую стоимость (число или текст)";
     }
 
     internal static class Delete

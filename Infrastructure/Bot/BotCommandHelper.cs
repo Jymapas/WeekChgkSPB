@@ -192,18 +192,21 @@ internal class BotCommandHelper
             return false;
         }
 
-        if (!int.TryParse(costLine, out var cost))
+        if (string.IsNullOrWhiteSpace(costLine))
         {
             error = Messages.Add.InvalidCost;
             return false;
         }
+
+        var (cost, costLabel) = ParseCost(costLine);
 
         announcement = new Announcement
         {
             TournamentName = name,
             Place = place,
             DateTimeUtc = dt,
-            Cost = cost
+            Cost = cost,
+            CostLabel = costLabel
         };
 
         error = string.Empty;
@@ -242,6 +245,14 @@ internal class BotCommandHelper
         return blocks;
     }
 
+    public static (int Cost, string? CostLabel) ParseCost(string input)
+    {
+        var trimmed = input.Trim();
+        if (int.TryParse(trimmed, out var cost))
+            return (cost, null);
+        return (0, trimmed);
+    }
+
     public void ResetDraft(AddAnnouncementState state)
     {
         state.Draft.Id = 0;
@@ -249,6 +260,7 @@ internal class BotCommandHelper
         state.Draft.Place = string.Empty;
         state.Draft.DateTimeUtc = DateTime.MinValue;
         state.Draft.Cost = 0;
+        state.Draft.CostLabel = null;
         state.DraftLink = string.Empty;
     }
 

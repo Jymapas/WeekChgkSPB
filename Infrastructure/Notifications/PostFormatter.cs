@@ -22,6 +22,9 @@ public static class PostFormatter
     public static string BuildScheduleHtml(IEnumerable<AnnouncementRow> rows, IEnumerable<string>? footerLines = null) =>
         BuildSchedule(rows, footerLines, Messages.Post.LjHeader);
 
+    public static string FormatCost(int cost, string? costLabel) =>
+        costLabel is not null ? costLabel : $"{cost} р.";
+
     public static string WrapAsCodeForTelegram(string html, int tgLimit = 4096)
     {
         var escaped = html.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
@@ -69,7 +72,7 @@ public static class PostFormatter
             foreach (var x in g)
             {
                 var time = x.local.ToString("HH:mm", Ru);
-                sb.Append($"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {x.r.Cost} р.</a>""")
+                sb.Append($"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {FormatCost(x.r.Cost, x.r.CostLabel)}</a>""")
                     .Append('\n');
             }
             sb.AppendLine();

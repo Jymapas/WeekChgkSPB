@@ -54,12 +54,15 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
             }),
             AddStep.EditWaitingCost => await HandleEdit(context, state, existing =>
             {
-                if (!int.TryParse(context.Message.Text, out var parsedCost))
+                var input = context.Message.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(input))
                 {
-                    return (false, Messages.InvalidNumber);
+                    return (false, Messages.Add.PromptCost);
                 }
 
+                var (parsedCost, costLabel) = BotCommandHelper.ParseCost(input);
                 existing.Cost = parsedCost;
+                existing.CostLabel = costLabel;
                 return (true, Messages.Edit.CostUpdated);
             }),
             _ => false
