@@ -23,7 +23,7 @@ public static class PostFormatter
         BuildSchedule(rows, footerLines, Messages.Post.LjHeader);
 
     public static string FormatCost(int cost, string? costLabel) =>
-        costLabel is not null ? costLabel : $"{cost} р.";
+        costLabel is not null ? costLabel : $"{cost}₽";
 
     public static string WrapAsCodeForTelegram(string html, int tgLimit = 4096)
     {

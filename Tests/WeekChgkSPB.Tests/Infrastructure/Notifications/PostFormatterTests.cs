@@ -21,11 +21,11 @@ public class PostFormatterTests
 Продолжаем вести список синхронов в Санкт-Петербурге.
 
 <b>10 января (пт)</b>
-<a href="https://example.com/1">First - Club1 (18:00) 100 р.</a>
-<a href="https://example.com/2">Second - Club2 (20:30) 200 р.</a>
+<a href="https://example.com/1">First - Club1 (18:00) 100₽</a>
+<a href="https://example.com/2">Second - Club2 (20:30) 200₽</a>
 
 <b>11 января (сб)</b>
-<a href="https://example.com/3">Third - Club3 (15:00) 150 р.</a>
+<a href="https://example.com/3">Third - Club3 (15:00) 150₽</a>
 """;
 
         Assert.Equal(expected, result);
@@ -40,11 +40,11 @@ public class PostFormatterTests
 Копия поста выкладывается в <a href="https://t.me/WeekChgkSPB" rel="nofollow">Телеграм-канал</a>.
 
 <b>10 января (пт)</b>
-<a href="https://example.com/1">First - Club1 (18:00) 100 р.</a>
-<a href="https://example.com/2">Second - Club2 (20:30) 200 р.</a>
+<a href="https://example.com/1">First - Club1 (18:00) 100₽</a>
+<a href="https://example.com/2">Second - Club2 (20:30) 200₽</a>
 
 <b>11 января (сб)</b>
-<a href="https://example.com/3">Third - Club3 (15:00) 150 р.</a>
+<a href="https://example.com/3">Third - Club3 (15:00) 150₽</a>
 """;
 
         Assert.Equal(expected, result);
@@ -62,11 +62,11 @@ public class PostFormatterTests
 Пост обновлён 19.09.2025
 
 <b>10 января (пт)</b>
-<a href="https://example.com/1">First - Club1 (18:00) 100 р.</a>
-<a href="https://example.com/2">Second - Club2 (20:30) 200 р.</a>
+<a href="https://example.com/1">First - Club1 (18:00) 100₽</a>
+<a href="https://example.com/2">Second - Club2 (20:30) 200₽</a>
 
 <b>11 января (сб)</b>
-<a href="https://example.com/3">Third - Club3 (15:00) 150 р.</a>
+<a href="https://example.com/3">Third - Club3 (15:00) 150₽</a>
 """;
 
         Assert.Equal(expected, result);
@@ -82,11 +82,11 @@ public class PostFormatterTests
 Продолжаем вести список синхронов в Санкт-Петербурге.
 
 <b>10 января (пт)</b>
-<a href="https://example.com/1">First - Club1 (18:00) 100 р.</a>
-<a href="https://example.com/2">Second - Club2 (20:30) 200 р.</a>
+<a href="https://example.com/1">First - Club1 (18:00) 100₽</a>
+<a href="https://example.com/2">Second - Club2 (20:30) 200₽</a>
 
 <b>11 января (сб)</b>
-<a href="https://example.com/3">Third - Club3 (15:00) 150 р.</a>
+<a href="https://example.com/3">Third - Club3 (15:00) 150₽</a>
 
 <i>Footer1</i>
 Footer2

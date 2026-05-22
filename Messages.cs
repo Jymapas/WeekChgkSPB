@@ -93,7 +93,7 @@ internal static class Messages
         internal static string DateTimePrompt(long id, string currentDateTime) =>
             $"Редактирование анонса {id}.\nТекущая дата и время (Москва): {currentDateTime}\nОтправь новую дату и время по Москве";
         internal static string CostPrompt(long id, int currentCost, string? costLabel = null) =>
-            $"Редактирование анонса {id}.\nТекущая стоимость: {costLabel ?? $"{currentCost} р."}\nОтправь новую стоимость (число или текст)";
+            $"Редактирование анонса {id}.\nТекущая стоимость: {costLabel ?? $"{currentCost}₽"}\nОтправь новую стоимость (число или текст)";
     }
 
     internal static class Delete
