@@ -129,7 +129,7 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleEditWaitingCost_InvalidNumber_KeepsWaiting()
+    public async Task HandleEditWaitingCost_TextCost_UpdatesCostLabel()
     {
         _fixture.Reset();
         var repo = _fixture.CreateAnnouncementsRepository();
@@ -158,7 +158,7 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
             botClient,
-            "не число",
+            "бесплатно",
             chatId,
             userId,
             repo,
@@ -173,11 +173,12 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var handled = await flow.HandleAsync(context, state);
 
         Assert.True(handled);
-        Assert.Equal(AddStep.EditWaitingCost, state.Step);
-        Assert.True(stateStore.TryGet(userId, out var storedState));
-        Assert.Same(state, storedState);
-        Assert.Equal(50, repo.Get(9)!.Cost);
-        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(AddStep.Done, state.Step);
+        var updated = repo.Get(9);
+        Assert.NotNull(updated);
+        Assert.Equal(0, updated!.Cost);
+        Assert.Equal("бесплатно", updated.CostLabel);
+        updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

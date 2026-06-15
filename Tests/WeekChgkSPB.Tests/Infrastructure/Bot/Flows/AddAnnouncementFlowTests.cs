@@ -467,7 +467,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public async Task HandleWaitingCost_InvalidNumber_KeepsWaiting()
+    public async Task HandleWaitingCost_EmptyInput_KeepsWaiting()
     {
         _fixture.Reset();
         var posts = _fixture.CreatePostsRepository();
@@ -487,7 +487,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
             botClient,
-            "не число",
+            "   ",
             chatId,
             userId,
             announcements,
@@ -630,8 +630,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             "https://example.com/post-511",
             "Турнир Б",
             "Клуб Б",
-            "2025-08-11T19:30",
-            "не_число"  // invalid cost
+            "не-дата",  // invalid date
+            "150"
         });
 
         var sentMessages = new List<string>();

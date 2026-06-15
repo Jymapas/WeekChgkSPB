@@ -79,6 +79,7 @@ public class BotCommandHelperTests
         Assert.Equal("Турнир", announcement.TournamentName);
         Assert.Equal("Клуб", announcement.Place);
         Assert.Equal(150, announcement.Cost);
+        Assert.Null(announcement.CostLabel);
         Assert.Equal(string.Empty, error);
     }
 
@@ -100,6 +101,7 @@ public class BotCommandHelperTests
         Assert.True(result);
         Assert.Equal("https://example.com/post/101", link);
         Assert.Equal(200, announcement.Cost);
+        Assert.Null(announcement.CostLabel);
         Assert.Equal(string.Empty, error);
     }
 
@@ -142,7 +144,7 @@ public class BotCommandHelperTests
     }
 
     [Fact]
-    public void TryBuildAnnouncementFromLines_InvalidCost_Fails()
+    public void TryBuildAnnouncementFromLines_TextCost_Succeeds()
     {
         var lines = string.Join('\n', new[]
         {
@@ -150,13 +152,28 @@ public class BotCommandHelperTests
             "name",
             "place",
             "2025-08-10T19:30",
-            "abc"
+            "бесплатно"
         });
 
-        var result = _helper.TryBuildAnnouncementFromLines(lines, out _, out _, out var error);
+        var result = _helper.TryBuildAnnouncementFromLines(lines, out var announcement, out _, out _);
 
-        Assert.False(result);
-        Assert.Contains("стоимость", error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(result);
+        Assert.Equal(0, announcement.Cost);
+        Assert.Equal("бесплатно", announcement.CostLabel);
+    }
+
+    [Theory]
+    [InlineData("150", 150, null)]
+    [InlineData("0", 0, null)]
+    [InlineData("бесплатно", 0, "бесплатно")]
+    [InlineData("донат", 0, "донат")]
+    [InlineData("free", 0, "free")]
+    public void ParseCost_VariousInputs_ReturnsExpected(string input, int expectedCost, string? expectedLabel)
+    {
+        var (cost, label) = BotCommandHelper.ParseCost(input);
+
+        Assert.Equal(expectedCost, cost);
+        Assert.Equal(expectedLabel, label);
     }
 
     [Fact]

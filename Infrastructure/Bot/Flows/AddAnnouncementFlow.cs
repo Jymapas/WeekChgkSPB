@@ -112,13 +112,16 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
 
     private async Task<bool> HandleWaitingCost(BotCommandContext context, AddAnnouncementState state)
     {
-        if (!int.TryParse(context.Message.Text, out var cost))
+        var input = context.Message.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(input))
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.InvalidNumber, cancellationToken: context.CancellationToken);
+            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Add.PromptCost, cancellationToken: context.CancellationToken);
             return true;
         }
 
+        var (cost, costLabel) = BotCommandHelper.ParseCost(input);
         state.Draft.Cost = cost;
+        state.Draft.CostLabel = costLabel;
         
         var userId = context.Message.From?.Id;
         var isAdmin = context.IsAdminChat;
@@ -147,6 +150,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                 Place = state.Draft.Place,
                 DateTimeUtc = state.Draft.DateTimeUtc,
                 Cost = state.Draft.Cost,
+                CostLabel = state.Draft.CostLabel,
                 UserId = userId.Value,
                 Link = state.DraftLink,
                 CreatedAt = DateTime.UtcNow
@@ -245,6 +249,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                 Place = announcement.Place,
                 DateTimeUtc = announcement.DateTimeUtc,
                 Cost = announcement.Cost,
+                CostLabel = announcement.CostLabel,
                 UserId = userId.Value,
                 Link = link,
                 CreatedAt = DateTime.UtcNow
@@ -344,6 +349,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                     Place = announcement.Place,
                     DateTimeUtc = announcement.DateTimeUtc,
                     Cost = announcement.Cost,
+                    CostLabel = announcement.CostLabel,
                     UserId = userId.Value,
                     Link = link,
                     CreatedAt = DateTime.UtcNow

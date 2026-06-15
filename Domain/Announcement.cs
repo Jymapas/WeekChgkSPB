@@ -7,5 +7,6 @@ public class Announcement
     public required string Place { get; set; }
     public DateTime DateTimeUtc { get; set; }
     public int Cost { get; set; }
+    public string? CostLabel { get; set; }
     public long? UserId { get; set; }
 }

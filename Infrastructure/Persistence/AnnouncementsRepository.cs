@@ -75,6 +75,8 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
 
         EnsureColumnExists(connection, "external_posts", "normalizedLink", "TEXT");
+        EnsureColumnExists(connection, "announcements", "cost_text", "TEXT");
+        EnsureColumnExists(connection, "pending_announcements", "cost_text", "TEXT");
         BackfillExternalNormalizedLinks(connection);
     }
 
@@ -151,13 +153,14 @@ public class AnnouncementsRepository
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"INSERT INTO announcements (id, tournamentName, place, dateTimeUtc, cost, userId)
-              VALUES (@id, @name, @place, @dt, @cost, @userId)";
+            @"INSERT INTO announcements (id, tournamentName, place, dateTimeUtc, cost, cost_text, userId)
+              VALUES (@id, @name, @place, @dt, @cost, @costText, @userId)";
         cmd.Parameters.AddWithValue("@id", a.Id);
         cmd.Parameters.AddWithValue("@name", a.TournamentName);
         cmd.Parameters.AddWithValue("@place", a.Place);
         cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.Parameters.AddWithValue("@costText", a.CostLabel is null ? DBNull.Value : a.CostLabel);
         cmd.Parameters.AddWithValue("@userId", a.UserId is null ? DBNull.Value : a.UserId);
         cmd.ExecuteNonQuery();
     }
@@ -171,12 +174,13 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText =
-            @"INSERT INTO announcements (tournamentName, place, dateTimeUtc, cost, userId)
-              VALUES (@name, @place, @dt, @cost, @userId)";
+            @"INSERT INTO announcements (tournamentName, place, dateTimeUtc, cost, cost_text, userId)
+              VALUES (@name, @place, @dt, @cost, @costText, @userId)";
         cmd.Parameters.AddWithValue("@name", a.TournamentName);
         cmd.Parameters.AddWithValue("@place", a.Place);
         cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.Parameters.AddWithValue("@costText", a.CostLabel is null ? DBNull.Value : a.CostLabel);
         cmd.Parameters.AddWithValue("@userId", a.UserId is null ? DBNull.Value : a.UserId);
         cmd.ExecuteNonQuery();
 
@@ -199,7 +203,7 @@ public class AnnouncementsRepository
         connection.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId
+            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId, cost_text
               FROM announcements
               WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
@@ -210,6 +214,7 @@ public class AnnouncementsRepository
         var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
         var dt = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal);
         var userId = reader.IsDBNull(5) ? null : (long?)reader.GetInt64(5);
+        var costLabel = reader.IsDBNull(6) ? null : reader.GetString(6);
 
         return new Announcement
         {
@@ -218,6 +223,7 @@ public class AnnouncementsRepository
             Place = place,
             DateTimeUtc = dt,
             Cost = reader.GetInt32(4),
+            CostLabel = costLabel,
             UserId = userId
         };
     }
@@ -235,7 +241,7 @@ public class AnnouncementsRepository
         connection.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, a.userId
+            @"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, a.userId, a.cost_text
               FROM announcements AS a
               LEFT JOIN posts AS p ON p.id = a.id
               LEFT JOIN external_posts AS e ON e.announcementId = a.id
@@ -253,6 +259,7 @@ public class AnnouncementsRepository
         var place = reader.IsDBNull(2) ? "" : reader.GetString(2);
         var dt = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal);
         var userId = reader.IsDBNull(5) ? null : (long?)reader.GetInt64(5);
+        var costLabel = reader.IsDBNull(6) ? null : reader.GetString(6);
 
         return new Announcement
         {
@@ -261,6 +268,7 @@ public class AnnouncementsRepository
             Place = place,
             DateTimeUtc = dt,
             Cost = reader.GetInt32(4),
+            CostLabel = costLabel,
             UserId = userId
         };
     }
@@ -275,13 +283,15 @@ public class AnnouncementsRepository
               SET tournamentName=@name,
                   place=@place,
                   dateTimeUtc=@dt,
-                  cost=@cost
+                  cost=@cost,
+                  cost_text=@costText
               WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", a.Id);
         cmd.Parameters.AddWithValue("@name", a.TournamentName);
         cmd.Parameters.AddWithValue("@place", a.Place);
         cmd.Parameters.AddWithValue("@dt", a.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", a.Cost);
+        cmd.Parameters.AddWithValue("@costText", a.CostLabel is null ? DBNull.Value : a.CostLabel);
         cmd.ExecuteNonQuery();
     }
 
@@ -293,7 +303,7 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         var toClause = toUtc is null ? string.Empty : " AND a.dateTimeUtc <= @to";
         cmd.CommandText =
-            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(p.link, e.link), a.userId
+            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(p.link, e.link), a.cost_text
           FROM announcements AS a
           LEFT JOIN posts AS p ON p.id = a.id
           LEFT JOIN external_posts AS e ON e.announcementId = a.id
@@ -315,7 +325,8 @@ public class AnnouncementsRepository
             var dt = DateTime.Parse(r.GetString(3), null, DateTimeStyles.AdjustToUniversal);
             var cost = r.GetInt32(4);
             var link = r.IsDBNull(5) ? "" : r.GetString(5);
-            list.Add(new AnnouncementRow(id, name, place, dt, cost, link));
+            var costLabel = r.IsDBNull(6) ? null : r.GetString(6);
+            list.Add(new AnnouncementRow(id, name, place, dt, cost, link, costLabel));
         }
 
         return list;

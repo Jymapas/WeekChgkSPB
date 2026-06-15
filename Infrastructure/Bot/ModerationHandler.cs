@@ -97,6 +97,7 @@ internal class ModerationHandler
             Place = pending.Place,
             DateTimeUtc = pending.DateTimeUtc,
             Cost = pending.Cost,
+            CostLabel = pending.CostLabel,
             UserId = pending.UserId
         };
 
@@ -149,6 +150,7 @@ internal class ModerationHandler
             Place = pending.Place,
             DateTimeUtc = pending.DateTimeUtc,
             Cost = pending.Cost,
+            CostLabel = pending.CostLabel,
             UserId = pending.UserId
         };
 
@@ -269,7 +271,7 @@ internal class ModerationHandler
                $"Название: {pending.TournamentName}\n" +
                $"Место: {pending.Place}\n" +
                $"Дата и время: {pending.DateTimeUtc:yyyy-MM-dd HH:mm} UTC\n" +
-               $"Стоимость: {pending.Cost}\n" +
+               $"Стоимость: {PostFormatter.FormatCost(pending.Cost, pending.CostLabel)}\n" +
                $"Ссылка: {pending.Link ?? "нет"}";
     }
 }

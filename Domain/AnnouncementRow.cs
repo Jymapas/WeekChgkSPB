@@ -6,4 +6,5 @@ public sealed record AnnouncementRow(
     string Place,
     DateTime DateTimeUtc,
     int Cost,
-    string Link);
+    string Link,
+    string? CostLabel = null);
