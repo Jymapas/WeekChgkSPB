@@ -106,11 +106,16 @@ internal static class Messages
     internal static class Footer
     {
         internal const string Prompt = "Отправь одну строку HTML для футера";
+        internal const string ExpiryPrompt = "Введи дату окончания (ДД.ММ.ГГГГ) или /skip для постоянного футера";
+        internal const string ExpiryInvalid = "Неверный формат даты. Введи ДД.ММ.ГГГГ или /skip";
         internal const string Empty = "Футер пуст";
         internal const string Deleted = "Удалено";
         internal const string TextRequired = "Нужен непустой текст";
         internal const string UsageError = "Используй: /footer_del <id>";
-        internal static string Added(long id) => $"Футер добавлен с id={id}";
+        internal static string Added(long id, DateTime? expiresAtMoscow = null) =>
+            expiresAtMoscow.HasValue
+                ? $"Футер добавлен с id={id} (до {expiresAtMoscow.Value:dd.MM.yyyy})"
+                : $"Футер добавлен с id={id}";
     }
 
     internal static class MakePost

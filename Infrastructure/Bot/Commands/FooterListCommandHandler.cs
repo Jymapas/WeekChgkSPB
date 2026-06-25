@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
+using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
@@ -22,7 +23,15 @@ internal class FooterListCommandHandler : IBotCommandHandler
             return;
         }
 
-        var lines = all.Select(x => $"{x.Id}: {x.Text}");
+        var lines = all.Select(x =>
+        {
+            if (x.ExpiresAt.HasValue)
+            {
+                var moscowDate = TimeZoneInfo.ConvertTimeFromUtc(x.ExpiresAt.Value, PostFormatter.Moscow);
+                return $"{x.Id}: {x.Text} [до {moscowDate:dd.MM.yyyy}]";
+            }
+            return $"{x.Id}: {x.Text}";
+        });
         var text = string.Join("\n", lines);
         await context.Bot.SendMessage(context.Message.Chat.Id, "<code>" + context.Helper.EscapeForCode(text) + "</code>", ParseMode.Html, cancellationToken: context.CancellationToken);
     }

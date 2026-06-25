@@ -21,22 +21,37 @@ public class FootersRepository
             pragma.ExecuteNonQuery();
         }
 
-        using var cmd = c.CreateCommand();
-        cmd.CommandText =
-            @"CREATE TABLE IF NOT EXISTS footers (
-                id   INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT NOT NULL
-            )";
-        cmd.ExecuteNonQuery();
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText =
+                @"CREATE TABLE IF NOT EXISTS footers (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    text       TEXT NOT NULL,
+                    expires_at TEXT
+                )";
+            cmd.ExecuteNonQuery();
+        }
+
+        try
+        {
+            using var alter = c.CreateCommand();
+            alter.CommandText = "ALTER TABLE footers ADD COLUMN expires_at TEXT";
+            alter.ExecuteNonQuery();
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column name"))
+        {
+            // column already exists — expected on existing databases
+        }
     }
 
-    public long Insert(string text)
+    public long Insert(string text, DateTime? expiresAt = null)
     {
         using var c = new SqliteConnection($"Data Source={_dbPath}");
         c.Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = @"INSERT INTO footers(text) VALUES(@t); SELECT last_insert_rowid();";
+        cmd.CommandText = @"INSERT INTO footers(text, expires_at) VALUES(@t, @e); SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("@t", text);
+        cmd.Parameters.AddWithValue("@e", expiresAt.HasValue ? (object)expiresAt.Value.ToString("o") : DBNull.Value);
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
@@ -50,15 +65,19 @@ public class FootersRepository
         cmd.ExecuteNonQuery();
     }
 
-    public List<(long Id, string Text)> ListAllDesc()
+    public List<(long Id, string Text, DateTime? ExpiresAt)> ListAllDesc()
     {
         using var c = new SqliteConnection($"Data Source={_dbPath}");
         c.Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT id, text FROM footers ORDER BY id DESC";
+        cmd.CommandText = "SELECT id, text, expires_at FROM footers ORDER BY id DESC";
         using var r = cmd.ExecuteReader();
-        var list = new List<(long, string)>();
-        while (r.Read()) list.Add((r.GetInt64(0), r.GetString(1)));
+        var list = new List<(long, string, DateTime?)>();
+        while (r.Read())
+        {
+            DateTime? exp = r.IsDBNull(2) ? null : DateTime.Parse(r.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind);
+            list.Add((r.GetInt64(0), r.GetString(1), exp));
+        }
         return list;
     }
 
@@ -67,7 +86,8 @@ public class FootersRepository
         using var c = new SqliteConnection($"Data Source={_dbPath}");
         c.Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT text FROM footers ORDER BY id DESC";
+        cmd.CommandText = "SELECT text FROM footers WHERE expires_at IS NULL OR expires_at > @now ORDER BY id DESC";
+        cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
         using var r = cmd.ExecuteReader();
         var list = new List<string>();
         while (r.Read()) list.Add(r.GetString(0));

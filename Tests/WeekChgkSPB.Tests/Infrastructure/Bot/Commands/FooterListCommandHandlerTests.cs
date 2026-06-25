@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
@@ -66,5 +67,34 @@ public class FooterListCommandHandlerTests : IClassFixture<SqliteFixture>
         Assert.Single(sent);
         Assert.Contains("<code>", sent[0]);
         Assert.Contains(id.ToString(), sent[0]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithExpiryFooter_ShowsExpiryDate()
+    {
+        _fixture.Reset();
+        var announcements = _fixture.CreateAnnouncementsRepository();
+        var posts = _fixture.CreatePostsRepository();
+        var footers = _fixture.CreateFootersRepository();
+        var helper = new BotCommandHelper(PostFormatter.Moscow);
+        var stateStore = new BotConversationState();
+
+        var expiryUtc = new DateTime(2030, 6, 15, 20, 59, 59, DateTimeKind.Utc);
+        footers.Insert("<b>timed</b>", expiryUtc);
+
+        var handler = new FooterListCommandHandler();
+        var (context, sent, _) = CommandTestContextFactory.Create(
+            BotCommands.FooterList,
+            announcements,
+            posts,
+            footers,
+            helper,
+            stateStore);
+
+        await handler.HandleAsync(context);
+
+        Assert.Single(sent);
+        Assert.Contains("до", sent[0]);
+        Assert.Contains("2030", sent[0]);
     }
 }
