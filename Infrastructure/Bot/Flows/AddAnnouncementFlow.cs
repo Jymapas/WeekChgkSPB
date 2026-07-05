@@ -190,6 +190,14 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         }
         await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
 
+        if (!isAdmin && userId.HasValue && context.Moderation is not null)
+        {
+            var userName = context.Message.From?.Username is not null
+                ? $"@{context.Message.From.Username}"
+                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim();
+            await context.Moderation.SendAllowedUserNotification(state.Draft, userName, context.CancellationToken);
+        }
+
         state.Step = AddStep.Done;
         await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Saved, cancellationToken: context.CancellationToken);
         context.StateStore.Remove(context.Message.From!.Id);
@@ -284,6 +292,15 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
         }
 
         await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
+
+        if (!isAdmin && userId.HasValue && context.Moderation is not null)
+        {
+            var userName = context.Message.From?.Username is not null
+                ? $"@{context.Message.From.Username}"
+                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim();
+            await context.Moderation.SendAllowedUserNotification(announcement, userName, context.CancellationToken);
+        }
+
         await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Saved, cancellationToken: context.CancellationToken);
         context.StateStore.Remove(context.Message.From!.Id);
         state.Existing = null;
@@ -374,6 +391,9 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                     context.Announcements.InsertExternal(announcement, link);
                 }
                 savedCount++;
+
+                if (!isAdmin && userId.HasValue && context.Moderation is not null)
+                    await context.Moderation.SendAllowedUserNotification(announcement, userName, context.CancellationToken);
             }
         }
 

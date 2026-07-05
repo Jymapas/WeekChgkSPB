@@ -96,7 +96,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -145,7 +146,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -194,7 +196,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -240,7 +243,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 
@@ -297,7 +301,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
         stateStore.AddOrUpdate(10).Step = AddStep.WaitingName;
@@ -347,7 +352,8 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
         var stateStore = new BotConversationState();
 

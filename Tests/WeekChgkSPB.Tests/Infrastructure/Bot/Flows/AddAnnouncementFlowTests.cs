@@ -790,7 +790,7 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var updater = new Mock<IChannelPostUpdater>();
         updater.Setup(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        var moderation = new ModerationHandler(botMock.Object, announcements, userManagement, posts, updater.Object, adminChatId: 1);
+        var moderation = new ModerationHandler(botMock.Object, announcements, userManagement, posts, updater.Object, adminChatId: 1, stateStore);
 
         var context = FlowTestContextFactory.CreateContext(botMock.Object, payload, chatId, userId, announcements, posts, footers, stateStore, helper, isAdminChat: false, userManagement: userManagement, moderation: moderation);
 
@@ -861,7 +861,8 @@ public class AddAnnouncementFlowTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            stateStore);
 
         var context = FlowTestContextFactory.CreateContext(
             botMock.Object,
