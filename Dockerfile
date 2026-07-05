@@ -10,6 +10,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
     dotnet restore ./WeekChgkSPB.csproj
 
 COPY . ./
+RUN test -f .env || touch .env
 RUN --mount=type=cache,target=/root/.nuget/packages \
     --mount=type=cache,target=/src/obj \
     dotnet publish ./WeekChgkSPB.csproj -c Release -o /app/publish /p:UseAppHost=false --no-restore
