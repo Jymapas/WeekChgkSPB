@@ -16,6 +16,7 @@ internal class ModerationHandler
     private readonly UserManagementRepository _userManagement;
     private readonly PostsRepository _posts;
     private readonly IChannelPostUpdater _channelPostUpdater;
+    private readonly FootersRepository _footers;
     private readonly long _adminChatId;
     private readonly BotConversationState _stateStore;
 
@@ -25,6 +26,7 @@ internal class ModerationHandler
         UserManagementRepository userManagement,
         PostsRepository posts,
         IChannelPostUpdater channelPostUpdater,
+        FootersRepository footers,
         long adminChatId,
         BotConversationState stateStore)
     {
@@ -33,6 +35,7 @@ internal class ModerationHandler
         _userManagement = userManagement;
         _posts = posts;
         _channelPostUpdater = channelPostUpdater;
+        _footers = footers;
         _adminChatId = adminChatId;
         _stateStore = stateStore;
     }
@@ -44,6 +47,9 @@ internal class ModerationHandler
 
         if (callbackQuery.Data.StartsWith("admedit_"))
             return await HandleAdminEditCallback(callbackQuery, ct);
+
+        if (callbackQuery.Data.StartsWith("footeredit_"))
+            return await HandleFooterEditCallback(callbackQuery, ct);
 
         if (!callbackQuery.Data.StartsWith("mod_"))
             return false;
@@ -141,6 +147,79 @@ internal class ModerationHandler
         await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
         await _bot.SendMessage(_adminChatId, prompt, cancellationToken: ct);
         return true;
+    }
+
+    private async Task<bool> HandleFooterEditCallback(CallbackQuery callbackQuery, CancellationToken ct)
+    {
+        var data = callbackQuery.Data!;
+        // Format: footeredit_{action}_{footerId}
+        var withoutPrefix = data["footeredit_".Length..];
+        var underscoreIdx = withoutPrefix.IndexOf('_');
+        if (underscoreIdx < 0) return false;
+
+        var action = withoutPrefix[..underscoreIdx];
+        if (!long.TryParse(withoutPrefix[(underscoreIdx + 1)..], out var footerId))
+            return false;
+
+        if (action == "select")
+        {
+            var footer = _footers.Get(footerId);
+            if (footer is null)
+            {
+                await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Footer.NotFound, cancellationToken: ct);
+                return true;
+            }
+
+            DateTime? displayDate = footer.Value.ExpiresAt.HasValue
+                ? TimeZoneInfo.ConvertTimeFromUtc(footer.Value.ExpiresAt.Value, PostFormatter.Moscow)
+                : null;
+
+            var text = Messages.Footer.Detail(footer.Value.Id, footer.Value.Text, displayDate);
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData(Messages.Footer.ButtonEditText, $"footeredit_text_{footerId}"),
+                    InlineKeyboardButton.WithCallbackData(Messages.Footer.ButtonEditExpiry, $"footeredit_expiry_{footerId}")
+                }
+            });
+
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
+            await _bot.SendMessage(_adminChatId, text, replyMarkup: keyboard, cancellationToken: ct);
+            return true;
+        }
+
+        if (action is "text" or "expiry")
+        {
+            var footer = _footers.Get(footerId);
+            if (footer is null)
+            {
+                await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Footer.NotFound, cancellationToken: ct);
+                return true;
+            }
+
+            var adminUserId = callbackQuery.From.Id;
+            var state = _stateStore.AddOrUpdate(adminUserId);
+            state.FooterEditId = footerId;
+
+            string prompt;
+            if (action == "text")
+            {
+                state.Step = AddStep.FooterEditWaitingText;
+                prompt = Messages.Footer.EditTextPrompt;
+            }
+            else
+            {
+                state.Step = AddStep.FooterEditWaitingExpiry;
+                prompt = Messages.Footer.EditExpiryPrompt;
+            }
+
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
+            await _bot.SendMessage(_adminChatId, prompt, cancellationToken: ct);
+            return true;
+        }
+
+        return false;
     }
 
     private async Task HandleApprove(PendingAnnouncement pending, CallbackQuery callbackQuery, CancellationToken ct)

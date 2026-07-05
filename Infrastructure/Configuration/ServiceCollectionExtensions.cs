@@ -28,6 +28,7 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<UserManagementRepository>(),
             sp.GetRequiredService<PostsRepository>(),
             sp.GetRequiredService<IChannelPostUpdater>(),
+            sp.GetRequiredService<FootersRepository>(),
             settings.ChatId,
             sp.GetRequiredService<BotConversationState>()));
         services.AddSingleton<INotifier>(_ => new TelegramNotifier(settings.BotToken, settings.ChatId));
@@ -56,6 +57,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IBotCommandHandler, FooterAddCommandHandler>();
         services.AddSingleton<IBotCommandHandler, FooterListCommandHandler>();
         services.AddSingleton<IBotCommandHandler, FooterDeleteCommandHandler>();
+        services.AddSingleton<IBotCommandHandler, FooterEditCommandHandler>();
         services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(settings.BotToken));
         services.AddSingleton<IChannelPostUpdater>(sp =>
         {

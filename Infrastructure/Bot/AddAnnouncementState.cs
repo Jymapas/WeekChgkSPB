@@ -15,7 +15,9 @@ internal enum AddStep
     EditWaitingCost,
     Done,
     FooterWaitingText,
-    FooterWaitingExpiry
+    FooterWaitingExpiry,
+    FooterEditWaitingText,
+    FooterEditWaitingExpiry
 }
 
 internal class AddAnnouncementState
@@ -29,4 +31,5 @@ internal class AddAnnouncementState
     };
     public Announcement? Existing { get; set; }
     public string FooterDraftText { get; set; } = string.Empty;
+    public long FooterEditId { get; set; }
 }

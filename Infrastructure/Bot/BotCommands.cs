@@ -21,6 +21,7 @@ public static class BotCommands
     public const string FooterAdd = "/footer_add";
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
+    public const string FooterEdit = "/footer_edit";
 
     public static readonly string[] AdminOnly =
     [
@@ -29,6 +30,7 @@ public static class BotCommands
         FooterAdd,
         FooterList,
         FooterDel,
+        FooterEdit,
     ];
 
     public static readonly string[] User =
@@ -68,6 +70,7 @@ public static class BotCommands
         [FooterAdd] = "Добавить футер",
         [FooterList] = "Список футеров",
         [FooterDel] = "Удалить футер",
+        [FooterEdit] = "Редактировать футер",
     };
 
     public static IReadOnlyList<BotCommand> AsAdminBotCommands() => ToBotCommands(All);
