@@ -112,6 +112,22 @@ internal static class Messages
         internal const string Deleted = "Удалено";
         internal const string TextRequired = "Нужен непустой текст";
         internal const string UsageError = "Используй: /footer_del <id>";
+        internal const string SelectPrompt = "Выбери футер для редактирования";
+        internal const string NoFooters = "Нет футеров";
+        internal const string NotFound = "Футер не найден";
+        internal const string ButtonEditText = "Изменить текст";
+        internal const string ButtonEditExpiry = "Изменить срок";
+        internal const string EditTextPrompt = "Отправь новый HTML-текст футера";
+        internal const string EditExpiryPrompt = "Введи новую дату окончания (ДД.ММ.ГГГГ) или /skip для постоянного";
+        internal static string TextUpdated(long id) => $"Текст футера {id} обновлён";
+        internal static string ExpiryUpdated(long id, DateTime? expiresAtMoscow) =>
+            expiresAtMoscow.HasValue
+                ? $"Срок футера {id} обновлён (до {expiresAtMoscow.Value:dd.MM.yyyy})"
+                : $"Футер {id} теперь постоянный";
+        internal static string Detail(long id, string text, DateTime? expiresAtMoscow) =>
+            expiresAtMoscow.HasValue
+                ? $"Футер #{id} (до {expiresAtMoscow.Value:dd.MM.yyyy}):\n{text}"
+                : $"Футер #{id} (постоянный):\n{text}";
         internal static string Added(long id, DateTime? expiresAtMoscow = null) =>
             expiresAtMoscow.HasValue
                 ? $"Футер добавлен с id={id} (до {expiresAtMoscow.Value:dd.MM.yyyy})"

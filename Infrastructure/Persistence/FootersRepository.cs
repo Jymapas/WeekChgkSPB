@@ -81,6 +81,41 @@ public class FootersRepository
         return list;
     }
 
+    public (long Id, string Text, DateTime? ExpiresAt)? Get(long id)
+    {
+        using var c = new SqliteConnection($"Data Source={_dbPath}");
+        c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT id, text, expires_at FROM footers WHERE id=@id";
+        cmd.Parameters.AddWithValue("@id", id);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        DateTime? exp = r.IsDBNull(2) ? null : DateTime.Parse(r.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind);
+        return (r.GetInt64(0), r.GetString(1), exp);
+    }
+
+    public void UpdateText(long id, string text)
+    {
+        using var c = new SqliteConnection($"Data Source={_dbPath}");
+        c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE footers SET text=@t WHERE id=@id";
+        cmd.Parameters.AddWithValue("@t", text);
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void UpdateExpiry(long id, DateTime? expiresAt)
+    {
+        using var c = new SqliteConnection($"Data Source={_dbPath}");
+        c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE footers SET expires_at=@e WHERE id=@id";
+        cmd.Parameters.AddWithValue("@e", expiresAt.HasValue ? (object)expiresAt.Value.ToString("o") : DBNull.Value);
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     public List<string> GetAllTextsDesc()
     {
         using var c = new SqliteConnection($"Data Source={_dbPath}");

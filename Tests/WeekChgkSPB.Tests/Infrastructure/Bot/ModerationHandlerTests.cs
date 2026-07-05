@@ -64,6 +64,7 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
+            _fixture.CreateFootersRepository(),
             adminChatId: 1,
             new BotConversationState());
 
@@ -122,6 +123,7 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
+            _fixture.CreateFootersRepository(),
             adminChatId: 1,
             new BotConversationState());
 
@@ -194,6 +196,7 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
+            _fixture.CreateFootersRepository(),
             adminChatId: 1,
             new BotConversationState());
 

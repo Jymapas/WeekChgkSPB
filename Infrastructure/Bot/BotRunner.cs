@@ -191,6 +191,9 @@ internal class BotRunner
             AddIfHandles(flow, AddStep.EditWaitingDateTime, grouped);
             AddIfHandles(flow, AddStep.EditWaitingCost, grouped);
             AddIfHandles(flow, AddStep.FooterWaitingText, grouped);
+            AddIfHandles(flow, AddStep.FooterWaitingExpiry, grouped);
+            AddIfHandles(flow, AddStep.FooterEditWaitingText, grouped);
+            AddIfHandles(flow, AddStep.FooterEditWaitingExpiry, grouped);
         }
 
         var result = new Dictionary<AddStep, IReadOnlyList<IConversationFlowHandler>>(grouped.Count);

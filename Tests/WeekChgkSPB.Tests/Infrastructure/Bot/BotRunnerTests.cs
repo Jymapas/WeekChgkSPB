@@ -96,6 +96,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
+            footers,
             adminChatId: 1,
             new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
@@ -146,6 +147,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
+            footers,
             adminChatId: 1,
             new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
@@ -196,6 +198,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
+            footers,
             adminChatId: 1,
             new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
@@ -243,6 +246,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
+            footers,
             adminChatId: 1,
             new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
@@ -301,6 +305,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
+            footers,
             adminChatId: 1,
             new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
@@ -352,6 +357,7 @@ public class BotRunnerHandleUpdateTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             channelPostUpdaterMock.Object,
+            footers,
             adminChatId: 1,
             new BotConversationState());
         var helper = new BotCommandHelper(PostFormatter.Moscow);
