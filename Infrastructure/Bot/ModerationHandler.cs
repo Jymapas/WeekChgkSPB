@@ -17,6 +17,7 @@ internal class ModerationHandler
     private readonly PostsRepository _posts;
     private readonly IChannelPostUpdater _channelPostUpdater;
     private readonly long _adminChatId;
+    private readonly BotConversationState _stateStore;
 
     public ModerationHandler(
         ITelegramBotClient bot,
@@ -24,7 +25,8 @@ internal class ModerationHandler
         UserManagementRepository userManagement,
         PostsRepository posts,
         IChannelPostUpdater channelPostUpdater,
-        long adminChatId)
+        long adminChatId,
+        BotConversationState stateStore)
     {
         _bot = bot;
         _announcements = announcements;
@@ -32,14 +34,19 @@ internal class ModerationHandler
         _posts = posts;
         _channelPostUpdater = channelPostUpdater;
         _adminChatId = adminChatId;
+        _stateStore = stateStore;
     }
 
     public async Task<bool> HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
     {
-        if (callbackQuery.Data is null || !callbackQuery.Data.StartsWith("mod_"))
-        {
+        if (callbackQuery.Data is null)
             return false;
-        }
+
+        if (callbackQuery.Data.StartsWith("admedit_"))
+            return await HandleAdminEditCallback(callbackQuery, ct);
+
+        if (!callbackQuery.Data.StartsWith("mod_"))
+            return false;
 
         var parts = callbackQuery.Data.Split('_');
         if (parts.Length < 3)
@@ -86,6 +93,53 @@ internal class ModerationHandler
                 return false;
         }
 
+        return true;
+    }
+
+    private async Task<bool> HandleAdminEditCallback(CallbackQuery callbackQuery, CancellationToken ct)
+    {
+        var parts = callbackQuery.Data!.Split('_');
+        // Format: admedit_{field}_{announcementId}
+        if (parts.Length < 3 || !long.TryParse(parts[2], out var announcementId))
+            return false;
+
+        var announcement = _announcements.Get(announcementId);
+        if (announcement is null)
+        {
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.AdminEditNotFound, cancellationToken: ct);
+            return true;
+        }
+
+        var adminUserId = callbackQuery.From.Id;
+        var state = _stateStore.AddOrUpdate(adminUserId);
+        state.Existing = announcement;
+
+        string prompt;
+        switch (parts[1])
+        {
+            case "name":
+                state.Step = AddStep.EditWaitingName;
+                prompt = Messages.Edit.NamePrompt(announcement.Id, announcement.TournamentName);
+                break;
+            case "datetime":
+                state.Step = AddStep.EditWaitingDateTime;
+                var moscowDt = TimeZoneInfo.ConvertTimeFromUtc(announcement.DateTimeUtc, PostFormatter.Moscow);
+                prompt = Messages.Edit.DateTimePrompt(announcement.Id, moscowDt.ToString("dd.MM.yyyy HH:mm"));
+                break;
+            case "place":
+                state.Step = AddStep.EditWaitingPlace;
+                prompt = Messages.Edit.PlacePrompt(announcement.Id, announcement.Place);
+                break;
+            case "cost":
+                state.Step = AddStep.EditWaitingCost;
+                prompt = Messages.Edit.CostPrompt(announcement.Id, announcement.Cost, announcement.CostLabel);
+                break;
+            default:
+                return false;
+        }
+
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
+        await _bot.SendMessage(_adminChatId, prompt, cancellationToken: ct);
         return true;
     }
 
@@ -265,6 +319,27 @@ internal class ModerationHandler
         await _bot.SendMessage(_adminChatId, text, replyMarkup: keyboard, cancellationToken: ct);
     }
 
+    public async Task SendAllowedUserNotification(Announcement announcement, string userName, CancellationToken ct)
+    {
+        var text = $"{Messages.Moderation.AllowedUserNewAnnouncement}\n\n{FormatAnnouncementForAdmin(announcement, userName)}";
+
+        var keyboard = new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditName, $"admedit_name_{announcement.Id}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditTime, $"admedit_datetime_{announcement.Id}")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditPlace, $"admedit_place_{announcement.Id}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditCost, $"admedit_cost_{announcement.Id}")
+            }
+        });
+
+        await _bot.SendMessage(_adminChatId, text, replyMarkup: keyboard, cancellationToken: ct);
+    }
+
     private static string FormatPendingAnnouncement(PendingAnnouncement pending, string userInfo)
     {
         return $"Пользователь: {userInfo}\n" +
@@ -273,5 +348,14 @@ internal class ModerationHandler
                $"Дата и время: {pending.DateTimeUtc:yyyy-MM-dd HH:mm} UTC\n" +
                $"Стоимость: {PostFormatter.FormatCost(pending.Cost, pending.CostLabel)}\n" +
                $"Ссылка: {pending.Link ?? "нет"}";
+    }
+
+    private static string FormatAnnouncementForAdmin(Announcement announcement, string userInfo)
+    {
+        return $"Пользователь: {userInfo}\n" +
+               $"Название: {announcement.TournamentName}\n" +
+               $"Место: {announcement.Place}\n" +
+               $"Дата и время: {announcement.DateTimeUtc:yyyy-MM-dd HH:mm} UTC\n" +
+               $"Стоимость: {PostFormatter.FormatCost(announcement.Cost, announcement.CostLabel)}";
     }
 }

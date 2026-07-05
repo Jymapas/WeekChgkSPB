@@ -28,7 +28,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<UserManagementRepository>(),
             sp.GetRequiredService<PostsRepository>(),
             sp.GetRequiredService<IChannelPostUpdater>(),
-            settings.ChatId));
+            settings.ChatId,
+            sp.GetRequiredService<BotConversationState>()));
         services.AddSingleton<INotifier>(_ => new TelegramNotifier(settings.BotToken, settings.ChatId));
         services.AddSingleton(_ => new BotCommandHelper(PostFormatter.Moscow));
         services.AddSingleton<BotConversationState>();

@@ -136,11 +136,17 @@ internal static class Messages
         internal const string ButtonAllow = "✅ Постить без модерации";
         internal const string ButtonReject = "❌ Отклонить пост";
         internal const string ButtonBan = "🚫 Забанить";
+        internal const string ButtonEditName = "✏️ Название";
+        internal const string ButtonEditTime = "✏️ Время";
+        internal const string ButtonEditPlace = "✏️ Место";
+        internal const string ButtonEditCost = "✏️ Стоимость";
         internal const string AdminApproved = "✅ Пост одобрен";
         internal const string AdminAllowed = "✅ Пользователь может постить без модерации";
         internal const string AdminRejected = "❌ Пост отклонен";
         internal const string AdminBanned = "🚫 Пользователь забанен";
+        internal const string AdminEditNotFound = "Анонс не найден";
         internal const string NewRequest = "Новая заявка на добавление анонса";
+        internal const string AllowedUserNewAnnouncement = "Новый анонс от разрешённого пользователя";
         internal const string UserBannedNotification = "Вы были заблокированы и больше не можете добавлять анонсы";
 
         internal static string UserApproved(string name) => $"Ваш анонс \"{name}\" был одобрен и добавлен";

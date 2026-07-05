@@ -64,7 +64,8 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
 
         var handled = await handler.HandleCallbackQuery(
             CreateCallbackQuery($"mod_approve_{pending.Id}", chatId: 1, messageId: 99),
@@ -121,7 +122,8 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
 
         var handled = await handler.HandleCallbackQuery(
             CreateCallbackQuery($"mod_allow_{pending.Id}", chatId: 1, messageId: 100),
@@ -192,7 +194,8 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
             userManagement,
             posts,
             updater.Object,
-            adminChatId: 1);
+            adminChatId: 1,
+            new BotConversationState());
 
         var handled = await handler.HandleCallbackQuery(
             CreateCallbackQuery($"mod_{action}_{pending.Id}", chatId: 1, messageId: 101),
