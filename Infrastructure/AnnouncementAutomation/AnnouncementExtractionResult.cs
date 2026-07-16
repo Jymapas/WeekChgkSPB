@@ -8,6 +8,10 @@ internal sealed record AnnouncementExtractionResult(
     int? OutputTokens,
     int PayloadLength)
 {
-    public static AnnouncementExtractionResult Failed(string failureCode, int payloadLength = 0) =>
-        new(false, failureCode, null, null, null, payloadLength);
+    public static AnnouncementExtractionResult Failed(
+        string failureCode,
+        int payloadLength = 0,
+        int? inputTokens = null,
+        int? outputTokens = null) =>
+        new(false, failureCode, null, inputTokens, outputTokens, payloadLength);
 }
