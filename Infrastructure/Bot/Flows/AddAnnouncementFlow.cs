@@ -144,6 +144,10 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                 return true;
             }
 
+            var userName = context.Message.From?.Username is not null
+                ? $"@{context.Message.From.Username}"
+                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim();
+
             var pending = new PendingAnnouncement
             {
                 TournamentName = state.Draft.TournamentName,
@@ -152,16 +156,13 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
                 Cost = state.Draft.Cost,
                 CostLabel = state.Draft.CostLabel,
                 UserId = userId.Value,
+                UserName = userName,
                 Link = state.DraftLink,
                 CreatedAt = DateTime.UtcNow
             };
 
             var pendingId = context.UserManagement.AddPending(pending);
             pending.Id = pendingId;
-
-            var userName = context.Message.From?.Username is not null
-                ? $"@{context.Message.From.Username}"
-                : $"{context.Message.From?.FirstName} {context.Message.From?.LastName}".Trim();
 
             await context.Moderation.SendModerationRequest(pending, userId.Value, userName, context.CancellationToken);
             await context.Bot.SendMessage(context.Message.Chat.Id, Messages.AnnouncementSentForModeration, cancellationToken: context.CancellationToken);
