@@ -6,6 +6,7 @@ using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Bot.Flows;
 using WeekChgkSPB.Infrastructure.Notifications;
+using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 namespace WeekChgkSPB.Infrastructure.Configuration;
 
@@ -21,7 +22,23 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton(new AnnouncementsRepository(settings.DbPath));
         services.AddSingleton(new ChannelPostsRepository(settings.DbPath));
         services.AddSingleton(new UserManagementRepository(settings.DbPath));
+        services.AddSingleton(new AnnouncementParseAttemptsRepository(settings.DbPath));
         services.AddSingleton(new RssFetcher(rssUrl));
+        services.AddSingleton(settings.AutomationOptions);
+        services.AddSingleton(PostFormatter.Moscow);
+        services.AddSingleton<AnnouncementPreParser>();
+        services.AddSingleton<TournamentNameNormalizer>();
+        services.AddSingleton<AnnouncementCandidateValidator>();
+        services.AddSingleton(sp =>
+        {
+            var client = new HttpClient
+            {
+                Timeout = settings.AutomationOptions.Timeout,
+                BaseAddress = settings.AutomationOptions.BaseUrl
+            };
+            return client;
+        });
+        services.AddSingleton<IAnnouncementExtractionClient, QwenAnnouncementExtractionClient>();
         services.AddSingleton(sp => new ModerationHandler(
             sp.GetRequiredService<ITelegramBotClient>(),
             sp.GetRequiredService<AnnouncementsRepository>(),
@@ -75,6 +92,7 @@ internal static class ServiceCollectionExtensions
                 sp.GetRequiredService<ITelegramBotClient>(),
                 settings.ChannelId!);
         });
+        services.AddSingleton<AnnouncementAutomationProcessor>();
         services.AddSingleton(sp => new BotRunner(
             sp.GetRequiredService<ITelegramBotClient>(),
             settings.ChatId,

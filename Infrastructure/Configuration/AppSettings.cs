@@ -1,4 +1,5 @@
 using WeekChgkSPB.Infrastructure.Notifications;
+using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 namespace WeekChgkSPB.Infrastructure.Configuration;
 
@@ -7,7 +8,8 @@ internal sealed record AppSettings(
     string BotToken,
     long ChatId,
     string? ChannelId,
-    ChannelPostScheduleOptions? ScheduleOptions)
+    ChannelPostScheduleOptions? ScheduleOptions,
+    AnnouncementAutomationOptions AutomationOptions)
 {
     public bool HasChannel => !string.IsNullOrEmpty(ChannelId);
     public bool HasScheduler => HasChannel && ScheduleOptions is not null;

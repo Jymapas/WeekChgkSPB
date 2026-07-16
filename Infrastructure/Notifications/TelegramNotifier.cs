@@ -27,6 +27,33 @@ public class TelegramNotifier : INotifier
             await SendCodeBlock(chunk, ct);
     }
 
+    public Task NotifyAutomationCandidateAsync(Post post, Announcement announcement, CancellationToken ct = default) =>
+        SendAutomationMessageAsync("SHADOW — кандидат не сохранён", post, announcement, ct);
+
+    public Task NotifyAutomationSavedAsync(Post post, Announcement announcement, CancellationToken ct = default) =>
+        SendAutomationMessageAsync("Анонс добавлен автоматически", post, announcement, ct);
+
+    private async Task SendAutomationMessageAsync(
+        string heading,
+        Post post,
+        Announcement announcement,
+        CancellationToken ct)
+    {
+        var local = TimeZoneInfo.ConvertTimeFromUtc(announcement.DateTimeUtc, PostFormatter.Moscow);
+        var text = $"<b>{Escape(heading)}</b>\n" +
+                   $"ID: <code>{post.Id}</code>\n" +
+                   $"Название: {Escape(announcement.TournamentName)}\n" +
+                   $"Площадка: {Escape(announcement.Place)}\n" +
+                   $"Дата: {local:dd.MM.yyyy HH:mm}\n" +
+                   $"Стоимость команды: {announcement.Cost} ₽";
+        await _bot.SendMessage(
+            _chatId,
+            text,
+            ParseMode.Html,
+            linkPreviewOptions: _noPreview,
+            cancellationToken: ct);
+    }
+
     private async Task SendCodeBlock(string text, CancellationToken ct)
     {
         var escaped = Escape(text);
