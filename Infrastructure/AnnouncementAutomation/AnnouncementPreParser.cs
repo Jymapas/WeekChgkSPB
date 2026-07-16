@@ -22,6 +22,11 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
     [
         "студент", "пар", "соло", "трио", "скид", "вторая игра", "вторую игру", "депозит"
     ];
+    private static readonly string[] IgnoredPostMarkers =
+    [
+        "перенос площадки",
+        "продолжается регистрация"
+    ];
     private static readonly Regex TagsRegex = new(
         @"<[^>]+>",
         RegexOptions.CultureInvariant,
@@ -79,6 +84,16 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         {
             var title = CleanInline(post.Title);
             var body = CleanBody(post.Description);
+            if (IgnoredPostMarkers.Any(marker =>
+                    title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
+                    body.Contains(marker, StringComparison.OrdinalIgnoreCase)))
+            {
+                return AnnouncementPreParseResult.Failed(
+                    "post_update_ignored",
+                    sourceLength,
+                    title);
+            }
+
             var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var eventLine = FindEventLine(lines);
             if (string.IsNullOrWhiteSpace(eventLine))

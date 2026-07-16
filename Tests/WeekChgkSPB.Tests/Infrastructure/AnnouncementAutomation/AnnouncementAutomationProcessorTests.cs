@@ -71,6 +71,25 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData("Перенос площадки")]
+    [InlineData("Продолжается регистрация")]
+    public async Task UpdatePost_FallsBackWithoutCallingApi(string marker)
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Shadow);
+        var post = CreatePost(103, "Команда — 1800 ₽");
+        post.Title = $"{marker}: Кубок знаний";
+        context.Posts.Insert(post);
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Equal(0, context.Extraction.CallCount);
+        Assert.Null(context.Announcements.Get(post.Id));
+        context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
+        context.Notifier.Verify(notifier => notifier.NotifyAutomationCandidateAsync(
+            It.IsAny<Post>(), It.IsAny<Announcement>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     public void Dispose()
     {
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
