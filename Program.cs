@@ -131,21 +131,31 @@ internal class Program
                 .Select(p => p.Id)
                 .ToList();
 
-            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id)))
+            foreach (var post in feedPosts.Where(p => p.Id != 0))
             {
+                var isNewPost = !repo.Exists(post.Id);
                 var hasAnnouncement = announcementsRepo.Exists(post.Id);
                 if (!hasAnnouncement && !string.IsNullOrWhiteSpace(post.Link))
                 {
                     hasAnnouncement = announcementsRepo.GetByLink(post.Link) is not null;
                 }
 
-                repo.Insert(post);
+                if (isNewPost)
+                {
+                    repo.Insert(post);
+                }
+
                 if (hasAnnouncement)
                 {
                     continue;
                 }
 
-                Console.WriteLine($"New post: {post.Id} — {post.Title}");
+                if (!automationProcessor.ShouldProcessPost(post.Id, isNewPost))
+                {
+                    continue;
+                }
+
+                Console.WriteLine($"Processing post: {post.Id} — {post.Title}");
                 try
                 {
                     await automationProcessor.ProcessAsync(post, DateTime.UtcNow, ct);

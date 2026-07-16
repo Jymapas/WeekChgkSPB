@@ -43,6 +43,18 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         context.Notifier.Verify(notifier => notifier.NotifyAutomationCandidateAsync(post, It.Is<Announcement>(a => a.Cost == 1900), It.IsAny<CancellationToken>()), Times.Once);
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
         context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.False(context.Processor.ShouldProcessPost(post.Id, isNewPost: false));
+    }
+
+    [Fact]
+    public void ExistingPost_IsEligibleOnlyWhenAutomationEnabledAndNoAttemptExists()
+    {
+        var active = CreateContext(AnnouncementAutomationMode.Active);
+        var off = CreateContext(AnnouncementAutomationMode.Off);
+
+        Assert.True(active.Processor.ShouldProcessPost(777, isNewPost: false));
+        Assert.True(off.Processor.ShouldProcessPost(777, isNewPost: true));
+        Assert.False(off.Processor.ShouldProcessPost(777, isNewPost: false));
     }
 
     [Fact]

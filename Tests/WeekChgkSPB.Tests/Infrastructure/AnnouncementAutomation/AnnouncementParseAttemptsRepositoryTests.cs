@@ -42,6 +42,8 @@ public sealed class AnnouncementParseAttemptsRepositoryTests : IDisposable
         Assert.Equal("cost_not_found", reader.GetString(0));
         Assert.Equal(900, reader.GetInt32(1));
         Assert.Equal("alibaba_model_studio", reader.GetString(2));
+        Assert.True(repository.Exists(12));
+        Assert.False(repository.Exists(13));
     }
 
     public void Dispose()

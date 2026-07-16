@@ -30,3 +30,5 @@ QWEN_TIMEOUT_SECONDS=30
 - `QWEN_TIMEOUT_SECONDS` — one-request timeout from 1 to 30 seconds; there are no retries.
 
 The bot extracts the standard full-team price locally. Price blocks, contacts, registration instructions and other RSS body sections are not sent to Qwen. Any ambiguous price, API/JSON error, or validation mismatch falls back to the manual flow. Start production evaluation in `shadow`; switch to `active` only after the agreed offline/shadow gates are met.
+
+When `shadow` or `active` starts, posts still present in RSS that already exist in `posts` but have neither an announcement nor an `announcement_parse_attempts` entry are processed as backlog. Each post is attempted only once. In `off`, previously notified posts are not sent again.

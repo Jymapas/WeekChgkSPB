@@ -52,6 +52,15 @@ internal sealed class AnnouncementParseAttemptsRepository
     public void MarkChannelUpdated(long postId) => Mark(postId, "channel_updated_at_utc");
     public void MarkNotified(long postId) => Mark(postId, "notified_at_utc");
 
+    public bool Exists(long postId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS(SELECT 1 FROM announcement_parse_attempts WHERE post_id=@postId)";
+        command.Parameters.AddWithValue("@postId", postId);
+        return (long)command.ExecuteScalar()! == 1;
+    }
+
     private void EnsureCreated()
     {
         var directory = Path.GetDirectoryName(_dbPath);

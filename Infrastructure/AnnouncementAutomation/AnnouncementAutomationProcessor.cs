@@ -17,6 +17,16 @@ internal sealed class AnnouncementAutomationProcessor(
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    public bool ShouldProcessPost(long postId, bool isNewPost)
+    {
+        if (options.Mode == AnnouncementAutomationMode.Off)
+        {
+            return isNewPost;
+        }
+
+        return !attempts.Exists(postId);
+    }
+
     public async Task ProcessAsync(Post post, DateTime nowUtc, CancellationToken cancellationToken)
     {
         if (options.Mode == AnnouncementAutomationMode.Off)
