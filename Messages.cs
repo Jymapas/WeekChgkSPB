@@ -156,6 +156,8 @@ internal static class Messages
         internal const string ButtonEditTime = "✏️ Время";
         internal const string ButtonEditPlace = "✏️ Место";
         internal const string ButtonEditCost = "✏️ Стоимость";
+        internal const string ButtonEdit = "✏️ Редактировать";
+        internal const string ButtonBack = "◀️ Назад";
         internal const string AdminApproved = "✅ Пост одобрен";
         internal const string AdminAllowed = "✅ Пользователь может постить без модерации";
         internal const string AdminRejected = "❌ Пост отклонен";

@@ -14,6 +14,7 @@ public class PendingAnnouncement
     public int Cost { get; set; }
     public string? CostLabel { get; set; }
     public long UserId { get; set; }
+    public string? UserName { get; set; }
     public string? Link { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -64,6 +65,15 @@ public class UserManagementRepository
         try
         {
             cmd.CommandText = "ALTER TABLE pending_announcements ADD COLUMN cost_text TEXT";
+            cmd.ExecuteNonQuery();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            cmd.CommandText = "ALTER TABLE pending_announcements ADD COLUMN userName TEXT";
             cmd.ExecuteNonQuery();
         }
         catch
@@ -125,14 +135,15 @@ public class UserManagementRepository
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"INSERT INTO pending_announcements (tournamentName, place, dateTimeUtc, cost, cost_text, userId, link, createdAt)
-              VALUES (@name, @place, @dt, @cost, @costText, @userId, @link, @createdAt)";
+            @"INSERT INTO pending_announcements (tournamentName, place, dateTimeUtc, cost, cost_text, userId, userName, link, createdAt)
+              VALUES (@name, @place, @dt, @cost, @costText, @userId, @userName, @link, @createdAt)";
         cmd.Parameters.AddWithValue("@name", pending.TournamentName);
         cmd.Parameters.AddWithValue("@place", pending.Place);
         cmd.Parameters.AddWithValue("@dt", pending.DateTimeUtc.ToUniversalTime().ToString("O"));
         cmd.Parameters.AddWithValue("@cost", pending.Cost);
         cmd.Parameters.AddWithValue("@costText", pending.CostLabel is null ? DBNull.Value : pending.CostLabel);
         cmd.Parameters.AddWithValue("@userId", pending.UserId);
+        cmd.Parameters.AddWithValue("@userName", pending.UserName is null ? DBNull.Value : pending.UserName);
         cmd.Parameters.AddWithValue("@link", pending.Link is null ? DBNull.Value : pending.Link);
         cmd.Parameters.AddWithValue("@createdAt", pending.CreatedAt.ToUniversalTime().ToString("O"));
         cmd.ExecuteNonQuery();
@@ -147,7 +158,7 @@ public class UserManagementRepository
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText =
-            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId, link, createdAt, cost_text
+            @"SELECT id, tournamentName, place, dateTimeUtc, cost, userId, link, createdAt, cost_text, userName
               FROM pending_announcements
               WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
@@ -160,6 +171,7 @@ public class UserManagementRepository
         var link = reader.IsDBNull(6) ? null : reader.GetString(6);
         var createdAt = DateTime.Parse(reader.GetString(7), null, System.Globalization.DateTimeStyles.AdjustToUniversal);
         var costLabel = reader.IsDBNull(8) ? null : reader.GetString(8);
+        var userName = reader.IsDBNull(9) ? null : reader.GetString(9);
 
         return new PendingAnnouncement
         {
@@ -170,9 +182,28 @@ public class UserManagementRepository
             Cost = reader.GetInt32(4),
             CostLabel = costLabel,
             UserId = reader.GetInt64(5),
+            UserName = userName,
             Link = link,
             CreatedAt = createdAt
         };
+    }
+
+    public bool UpdatePending(PendingAnnouncement pending)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            @"UPDATE pending_announcements
+              SET tournamentName=@name, place=@place, dateTimeUtc=@dt, cost=@cost, cost_text=@costText
+              WHERE id=@id";
+        cmd.Parameters.AddWithValue("@name", pending.TournamentName);
+        cmd.Parameters.AddWithValue("@place", pending.Place);
+        cmd.Parameters.AddWithValue("@dt", pending.DateTimeUtc.ToUniversalTime().ToString("O"));
+        cmd.Parameters.AddWithValue("@cost", pending.Cost);
+        cmd.Parameters.AddWithValue("@costText", pending.CostLabel is null ? DBNull.Value : pending.CostLabel);
+        cmd.Parameters.AddWithValue("@id", pending.Id);
+        return cmd.ExecuteNonQuery() > 0;
     }
 
     public bool DeletePending(long id)

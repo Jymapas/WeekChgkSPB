@@ -51,6 +51,15 @@ internal class ModerationHandler
         if (callbackQuery.Data.StartsWith("footeredit_"))
             return await HandleFooterEditCallback(callbackQuery, ct);
 
+        if (callbackQuery.Data.StartsWith("modeditback_"))
+            return await HandleModEditBackCallback(callbackQuery, ct);
+
+        if (callbackQuery.Data.StartsWith("modedit_"))
+            return await HandleModEditMenuCallback(callbackQuery, ct);
+
+        if (callbackQuery.Data.StartsWith("pmedit_"))
+            return await HandlePendingFieldEditCallback(callbackQuery, ct);
+
         if (!callbackQuery.Data.StartsWith("mod_"))
             return false;
 
@@ -222,6 +231,165 @@ internal class ModerationHandler
         return false;
     }
 
+    private async Task<bool> HandleModEditMenuCallback(CallbackQuery callbackQuery, CancellationToken ct)
+    {
+        var parts = callbackQuery.Data!.Split('_');
+        if (parts.Length < 2 || !long.TryParse(parts[1], out var pendingId))
+            return false;
+
+        var pending = _userManagement.GetPending(pendingId);
+        if (pending is null)
+        {
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.RequestNotFound, cancellationToken: ct);
+            return true;
+        }
+
+        if (callbackQuery.Message is not null)
+        {
+            await _bot.EditMessageReplyMarkup(
+                callbackQuery.Message.Chat.Id,
+                callbackQuery.Message.MessageId,
+                BuildPendingEditFieldsKeyboard(pendingId),
+                cancellationToken: ct);
+        }
+
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
+        return true;
+    }
+
+    private async Task<bool> HandleModEditBackCallback(CallbackQuery callbackQuery, CancellationToken ct)
+    {
+        var parts = callbackQuery.Data!.Split('_');
+        if (parts.Length < 2 || !long.TryParse(parts[1], out var pendingId))
+            return false;
+
+        var pending = _userManagement.GetPending(pendingId);
+        if (pending is null)
+        {
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.RequestNotFound, cancellationToken: ct);
+            return true;
+        }
+
+        if (callbackQuery.Message is not null)
+        {
+            await _bot.EditMessageReplyMarkup(
+                callbackQuery.Message.Chat.Id,
+                callbackQuery.Message.MessageId,
+                BuildModerationKeyboard(pendingId),
+                cancellationToken: ct);
+        }
+
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
+        return true;
+    }
+
+    private async Task<bool> HandlePendingFieldEditCallback(CallbackQuery callbackQuery, CancellationToken ct)
+    {
+        var parts = callbackQuery.Data!.Split('_');
+        // Format: pmedit_{field}_{pendingId}
+        if (parts.Length < 3 || !long.TryParse(parts[2], out var pendingId))
+            return false;
+
+        var pending = _userManagement.GetPending(pendingId);
+        if (pending is null)
+        {
+            await _bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Moderation.RequestNotFound, cancellationToken: ct);
+            return true;
+        }
+
+        var adminUserId = callbackQuery.From.Id;
+        var state = _stateStore.AddOrUpdate(adminUserId);
+        state.PendingEditId = pendingId;
+        if (callbackQuery.Message is not null)
+        {
+            state.PendingEditChatId = callbackQuery.Message.Chat.Id;
+            state.PendingEditMessageId = callbackQuery.Message.MessageId;
+        }
+
+        string prompt;
+        switch (parts[1])
+        {
+            case "name":
+                state.Step = AddStep.PendingEditWaitingName;
+                prompt = Messages.Edit.NamePrompt(pending.Id, pending.TournamentName);
+                break;
+            case "datetime":
+                state.Step = AddStep.PendingEditWaitingDateTime;
+                var moscowDt = TimeZoneInfo.ConvertTimeFromUtc(pending.DateTimeUtc, PostFormatter.Moscow);
+                prompt = Messages.Edit.DateTimePrompt(pending.Id, moscowDt.ToString("dd.MM.yyyy HH:mm"));
+                break;
+            case "place":
+                state.Step = AddStep.PendingEditWaitingPlace;
+                prompt = Messages.Edit.PlacePrompt(pending.Id, pending.Place);
+                break;
+            case "cost":
+                state.Step = AddStep.PendingEditWaitingCost;
+                prompt = Messages.Edit.CostPrompt(pending.Id, pending.Cost, pending.CostLabel);
+                break;
+            default:
+                return false;
+        }
+
+        await _bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
+        await _bot.SendMessage(_adminChatId, prompt, cancellationToken: ct);
+        return true;
+    }
+
+    internal async Task RefreshModerationMessage(PendingAnnouncement pending, long chatId, int messageId, CancellationToken ct)
+    {
+        var userInfo = pending.UserName ?? $"#{pending.UserId}";
+        var text = $"{Messages.Moderation.NewRequest}\n\n{FormatPendingAnnouncement(pending, userInfo)}";
+
+        await _bot.EditMessageText(
+            chatId,
+            messageId,
+            text,
+            replyMarkup: BuildModerationKeyboard(pending.Id),
+            cancellationToken: ct);
+    }
+
+    private static InlineKeyboardMarkup BuildModerationKeyboard(long pendingId)
+    {
+        return new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonApprove, $"mod_approve_{pendingId}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonAllow, $"mod_allow_{pendingId}")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonReject, $"mod_reject_{pendingId}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonBan, $"mod_ban_{pendingId}")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEdit, $"modedit_{pendingId}")
+            }
+        });
+    }
+
+    private static InlineKeyboardMarkup BuildPendingEditFieldsKeyboard(long pendingId)
+    {
+        return new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditName, $"pmedit_name_{pendingId}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditTime, $"pmedit_datetime_{pendingId}")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditPlace, $"pmedit_place_{pendingId}"),
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonEditCost, $"pmedit_cost_{pendingId}")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonBack, $"modeditback_{pendingId}")
+            }
+        });
+    }
+
     private async Task HandleApprove(PendingAnnouncement pending, CallbackQuery callbackQuery, CancellationToken ct)
     {
         var announcement = new Announcement
@@ -252,9 +420,7 @@ internal class ModerationHandler
         _userManagement.DeletePending(pending.Id);
         await _channelPostUpdater.UpdateLastPostAsync(ct);
 
-        var userInfo = callbackQuery.From.Username is not null
-            ? $"@{callbackQuery.From.Username}"
-            : $"{callbackQuery.From.FirstName} {callbackQuery.From.LastName}".Trim();
+        var userInfo = pending.UserName ?? $"#{pending.UserId}";
 
         if (callbackQuery.Message is not null)
         {
@@ -305,9 +471,7 @@ internal class ModerationHandler
         _userManagement.DeletePending(pending.Id);
         await _channelPostUpdater.UpdateLastPostAsync(ct);
 
-        var userInfo = callbackQuery.From.Username is not null
-            ? $"@{callbackQuery.From.Username}"
-            : $"{callbackQuery.From.FirstName} {callbackQuery.From.LastName}".Trim();
+        var userInfo = pending.UserName ?? $"#{pending.UserId}";
 
         if (callbackQuery.Message is not null)
         {
@@ -330,9 +494,7 @@ internal class ModerationHandler
     {
         _userManagement.DeletePending(pending.Id);
 
-        var userInfo = callbackQuery.From.Username is not null
-            ? $"@{callbackQuery.From.Username}"
-            : $"{callbackQuery.From.FirstName} {callbackQuery.From.LastName}".Trim();
+        var userInfo = pending.UserName ?? $"#{pending.UserId}";
 
         if (callbackQuery.Message is not null)
         {
@@ -356,9 +518,7 @@ internal class ModerationHandler
         _userManagement.BanUser(pending.UserId);
         _userManagement.DeletePending(pending.Id);
 
-        var userInfo = callbackQuery.From.Username is not null
-            ? $"@{callbackQuery.From.Username}"
-            : $"{callbackQuery.From.FirstName} {callbackQuery.From.LastName}".Trim();
+        var userInfo = pending.UserName ?? $"#{pending.UserId}";
 
         if (callbackQuery.Message is not null)
         {
@@ -381,21 +541,7 @@ internal class ModerationHandler
     {
         var text = $"{Messages.Moderation.NewRequest}\n\n{FormatPendingAnnouncement(pending, userName)}";
 
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonApprove, $"mod_approve_{pending.Id}"),
-                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonAllow, $"mod_allow_{pending.Id}")
-            },
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonReject, $"mod_reject_{pending.Id}"),
-                InlineKeyboardButton.WithCallbackData(Messages.Moderation.ButtonBan, $"mod_ban_{pending.Id}")
-            }
-        });
-
-        await _bot.SendMessage(_adminChatId, text, replyMarkup: keyboard, cancellationToken: ct);
+        await _bot.SendMessage(_adminChatId, text, replyMarkup: BuildModerationKeyboard(pending.Id), cancellationToken: ct);
     }
 
     public async Task SendAllowedUserNotification(Announcement announcement, string userName, CancellationToken ct)
@@ -421,10 +567,11 @@ internal class ModerationHandler
 
     private static string FormatPendingAnnouncement(PendingAnnouncement pending, string userInfo)
     {
+        var moscowDt = TimeZoneInfo.ConvertTimeFromUtc(pending.DateTimeUtc, PostFormatter.Moscow);
         return $"Пользователь: {userInfo}\n" +
                $"Название: {pending.TournamentName}\n" +
                $"Место: {pending.Place}\n" +
-               $"Дата и время: {pending.DateTimeUtc:yyyy-MM-dd HH:mm} UTC\n" +
+               $"Дата и время: {moscowDt:yyyy-MM-dd HH:mm} МСК\n" +
                $"Стоимость: {PostFormatter.FormatCost(pending.Cost, pending.CostLabel)}\n" +
                $"Ссылка: {pending.Link ?? "нет"}";
     }

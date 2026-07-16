@@ -38,6 +38,8 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IConversationFlowHandler>(sp => new EditAnnouncementFlow(
             sp.GetRequiredService<IChannelPostUpdater>()));
         services.AddSingleton<IConversationFlowHandler, FooterFlow>();
+        services.AddSingleton<IConversationFlowHandler>(sp => new PendingEditFlow(
+            sp.GetRequiredService<ModerationHandler>()));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
         services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
