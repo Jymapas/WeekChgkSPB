@@ -12,6 +12,7 @@ using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Bot.Flows;
 using WeekChgkSPB.Infrastructure.Notifications;
 using WeekChgkSPB.Infrastructure.Configuration;
+using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 internal class Program
 {
@@ -36,7 +37,7 @@ internal class Program
         var repo = services.GetRequiredService<PostsRepository>();
         var announcementsRepo = services.GetRequiredService<AnnouncementsRepository>();
         var fetcher = services.GetRequiredService<RssFetcher>();
-        var notifier = services.GetRequiredService<INotifier>();
+        var automationProcessor = services.GetRequiredService<AnnouncementAutomationProcessor>();
         var botRunner = services.GetRequiredService<BotRunner>();
         var botClient = services.GetRequiredService<ITelegramBotClient>();
         var scheduler = services.GetService<ScheduledPostPublisher>();
@@ -86,7 +87,7 @@ internal class Program
             cancellationToken: cts.Token);
         botRunner.Start(cts.Token);
 
-        await CheckOnceAsync(fetcher, repo, announcementsRepo, notifier, cts.Token);
+        await CheckOnceAsync(fetcher, repo, announcementsRepo, automationProcessor, cts.Token);
         var lastRssCheck = DateTime.UtcNow;
 
         if (scheduler is not null)
@@ -101,7 +102,7 @@ internal class Program
             {
                 if (DateTime.UtcNow - lastRssCheck >= TimeSpan.FromHours(1))
                 {
-                    await CheckOnceAsync(fetcher, repo, announcementsRepo, notifier, cts.Token);
+                    await CheckOnceAsync(fetcher, repo, announcementsRepo, automationProcessor, cts.Token);
                     lastRssCheck = DateTime.UtcNow;
                 }
 
@@ -119,7 +120,7 @@ internal class Program
         await host.StopAsync();
     }
 
-    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, AnnouncementsRepository announcementsRepo, INotifier notifier,
+    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, AnnouncementsRepository announcementsRepo, AnnouncementAutomationProcessor automationProcessor,
         CancellationToken ct)
     {
         try
@@ -130,28 +131,38 @@ internal class Program
                 .Select(p => p.Id)
                 .ToList();
 
-            foreach (var post in feedPosts.Where(p => p.Id != 0 && !repo.Exists(p.Id)))
+            foreach (var post in feedPosts.Where(p => p.Id != 0))
             {
+                var isNewPost = !repo.Exists(post.Id);
                 var hasAnnouncement = announcementsRepo.Exists(post.Id);
                 if (!hasAnnouncement && !string.IsNullOrWhiteSpace(post.Link))
                 {
                     hasAnnouncement = announcementsRepo.GetByLink(post.Link) is not null;
                 }
 
-                repo.Insert(post);
+                if (isNewPost)
+                {
+                    repo.Insert(post);
+                }
+
                 if (hasAnnouncement)
                 {
                     continue;
                 }
 
-                Console.WriteLine($"New post: {post.Id} — {post.Title}");
+                if (!automationProcessor.ShouldProcessPost(post.Id, isNewPost))
+                {
+                    continue;
+                }
+
+                Console.WriteLine($"Processing post: {post.Id} — {post.Title}");
                 try
                 {
-                    await notifier.NotifyNewPostAsync(post, ct);
+                    await automationProcessor.ProcessAsync(post, DateTime.UtcNow, ct);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Telegram send failed: {e.Message}");
+                    Console.WriteLine($"Announcement processing failed: {e.Message}");
                 }
 
                 await Task.Delay(250, ct);
@@ -228,7 +239,71 @@ internal class Program
             Console.WriteLine("Telegram channel scheduler disabled: TELEGRAM_CHANNEL_ID not set.");
         }
 
-        settings = new AppSettings(dbPath, token, chatId, channelId, scheduleOptions);
+        if (!TryLoadAutomationOptions(out var automationOptions))
+        {
+            settings = default!;
+            return false;
+        }
+
+        settings = new AppSettings(dbPath, token, chatId, channelId, scheduleOptions, automationOptions);
+        return true;
+    }
+
+    private static bool TryLoadAutomationOptions(out AnnouncementAutomationOptions options)
+    {
+        var modeValue = Environment.GetEnvironmentVariable("ANNOUNCEMENT_AUTO_PARSE_MODE")?.Trim().ToLowerInvariant() ?? "off";
+        var mode = modeValue switch
+        {
+            "off" => AnnouncementAutomationMode.Off,
+            "shadow" => AnnouncementAutomationMode.Shadow,
+            "active" => AnnouncementAutomationMode.Active,
+            _ => (AnnouncementAutomationMode?)null
+        };
+        if (mode is null)
+        {
+            Console.WriteLine("Invalid ANNOUNCEMENT_AUTO_PARSE_MODE; expected off, shadow or active.");
+            options = AnnouncementAutomationOptions.Disabled;
+            return false;
+        }
+
+        if (mode == AnnouncementAutomationMode.Off)
+        {
+            options = AnnouncementAutomationOptions.Disabled;
+            Console.WriteLine("Announcement auto parsing is off.");
+            return true;
+        }
+
+        var endpointText = Environment.GetEnvironmentVariable("QWEN_API_BASE_URL") ??
+                           "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/";
+        var apiKey = Environment.GetEnvironmentVariable("QWEN_API_KEY");
+        var model = Environment.GetEnvironmentVariable("QWEN_MODEL") ?? AnnouncementAutomationOptions.DefaultModel;
+        var timeoutText = Environment.GetEnvironmentVariable("QWEN_TIMEOUT_SECONDS") ?? "30";
+        if (!Uri.TryCreate(endpointText, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme != Uri.UriSchemeHttps ||
+            !(endpoint.Host.Equals("aliyuncs.com", StringComparison.OrdinalIgnoreCase) ||
+              endpoint.Host.EndsWith(".aliyuncs.com", StringComparison.OrdinalIgnoreCase)) ||
+            string.IsNullOrWhiteSpace(apiKey) ||
+            !string.Equals(model, AnnouncementAutomationOptions.DefaultModel, StringComparison.Ordinal) ||
+            !int.TryParse(timeoutText, out var timeoutSeconds) ||
+            timeoutSeconds is < 1 or > 30)
+        {
+            Console.WriteLine("Qwen configuration is invalid. Set QWEN_API_KEY, the pinned model and a HTTPS aliyuncs.com endpoint; timeout must be 1..30 seconds.");
+            options = AnnouncementAutomationOptions.Disabled;
+            return false;
+        }
+
+        if (!endpoint.AbsoluteUri.EndsWith('/'))
+        {
+            endpoint = new Uri(endpoint.AbsoluteUri + "/");
+        }
+
+        options = new AnnouncementAutomationOptions(
+            mode.Value,
+            endpoint,
+            apiKey,
+            model,
+            TimeSpan.FromSeconds(timeoutSeconds));
+        Console.WriteLine($"Announcement auto parsing mode: {modeValue}; model: {model}.");
         return true;
     }
 

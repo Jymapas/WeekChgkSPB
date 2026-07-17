@@ -21,7 +21,11 @@ internal enum AddStep
     PendingEditWaitingName,
     PendingEditWaitingPlace,
     PendingEditWaitingDateTime,
-    PendingEditWaitingCost
+    PendingEditWaitingCost,
+    AutomationReviewWaitingName,
+    AutomationReviewWaitingPlace,
+    AutomationReviewWaitingDateTime,
+    AutomationReviewWaitingCost
 }
 
 internal class AddAnnouncementState
@@ -39,4 +43,7 @@ internal class AddAnnouncementState
     public long? PendingEditId { get; set; }
     public long? PendingEditChatId { get; set; }
     public int? PendingEditMessageId { get; set; }
+    public long? AutomationReviewPostId { get; set; }
+    public long? AutomationReviewChatId { get; set; }
+    public int? AutomationReviewMessageId { get; set; }
 }

@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
+using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 namespace WeekChgkSPB;
 
@@ -105,6 +106,29 @@ public class PostsRepository
         return count > 0;
     }
 
+    public Post? Get(long id)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT id, title, link, description FROM posts WHERE id=@id";
+        command.Parameters.AddWithValue("@id", id);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        return new Post
+        {
+            Id = reader.GetInt64(0),
+            Title = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+            Link = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+            Description = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
+        };
+    }
+
     public bool TryGetIdByLink(string link, out long id)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
@@ -139,6 +163,50 @@ public class PostsRepository
         cmd.Parameters.AddWithValue("@description", post.Description);
         cmd.Parameters.AddWithValue("@normalizedLink", LinkNormalizer.Normalize(post.Link));
         cmd.ExecuteNonQuery();
+    }
+
+    internal IReadOnlyList<AnnouncementNameExample> FindNameExamples(string? sourceTitle, int limit)
+    {
+        if (limit <= 0)
+        {
+            return [];
+        }
+
+        var tokens = (sourceTitle ?? string.Empty)
+            .Split([' ', '-', '—', '–', ':', '«', '»', '"'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(token => token.Length >= 3)
+            .Select(token => token.ToLowerInvariant())
+            .ToHashSet();
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT p.title, a.tournamentName
+            FROM announcements a
+            JOIN posts p ON p.id = a.id
+            WHERE p.title IS NOT NULL AND p.title <> ''
+            ORDER BY a.dateTimeUtc DESC
+            LIMIT 100
+            """;
+        using var reader = command.ExecuteReader();
+        var examples = new List<(AnnouncementNameExample Example, int Score)>();
+        while (reader.Read())
+        {
+            var title = reader.GetString(0);
+            var score = tokens.Count(token => title.Contains(token, StringComparison.OrdinalIgnoreCase));
+            if (score > 0)
+            {
+                examples.Add((new AnnouncementNameExample(title, reader.GetString(1)), score));
+            }
+        }
+
+        return examples
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Example.SourceTitle, StringComparer.Ordinal)
+            .Take(Math.Min(limit, 3))
+            .Select(item => item.Example)
+            .ToList();
     }
 
     public int DeleteWithoutAnnouncementsNotInFeed(IReadOnlyCollection<long> rssIds)

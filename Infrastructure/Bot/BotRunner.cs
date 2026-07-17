@@ -6,6 +6,7 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using WeekChgkSPB.Infrastructure.Notifications;
+using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 namespace WeekChgkSPB.Infrastructure.Bot;
 
@@ -18,6 +19,7 @@ internal class BotRunner
     private readonly FootersRepository _footers;
     private readonly UserManagementRepository _userManagement;
     private readonly ModerationHandler _moderationHandler;
+    private readonly AnnouncementReviewHandler? _announcementReviewHandler;
     private readonly BotCommandHelper _helper;
     private readonly BotConversationState _stateStore;
     private readonly IReadOnlyList<IBotCommandHandler> _handlers;
@@ -34,7 +36,8 @@ internal class BotRunner
         BotCommandHelper helper,
         BotConversationState stateStore,
         IEnumerable<IBotCommandHandler> handlers,
-        IEnumerable<IConversationFlowHandler> flows)
+        IEnumerable<IConversationFlowHandler> flows,
+        AnnouncementReviewHandler? announcementReviewHandler = null)
     {
         _bot = bot;
         _allowedChatId = allowedChatId;
@@ -43,6 +46,7 @@ internal class BotRunner
         _footers = footers;
         _userManagement = userManagement;
         _moderationHandler = moderationHandler;
+        _announcementReviewHandler = announcementReviewHandler;
         _helper = helper;
         _stateStore = stateStore;
         _handlers = handlers.ToList();
@@ -113,6 +117,12 @@ internal class BotRunner
         }
 
         if (await _moderationHandler.HandleCallbackQuery(callbackQuery, ct))
+        {
+            return;
+        }
+
+        if (_announcementReviewHandler is not null &&
+            await _announcementReviewHandler.HandleCallbackQuery(callbackQuery, ct))
         {
             return;
         }
@@ -198,6 +208,10 @@ internal class BotRunner
             AddIfHandles(flow, AddStep.PendingEditWaitingPlace, grouped);
             AddIfHandles(flow, AddStep.PendingEditWaitingDateTime, grouped);
             AddIfHandles(flow, AddStep.PendingEditWaitingCost, grouped);
+            AddIfHandles(flow, AddStep.AutomationReviewWaitingName, grouped);
+            AddIfHandles(flow, AddStep.AutomationReviewWaitingPlace, grouped);
+            AddIfHandles(flow, AddStep.AutomationReviewWaitingDateTime, grouped);
+            AddIfHandles(flow, AddStep.AutomationReviewWaitingCost, grouped);
         }
 
         var result = new Dictionary<AddStep, IReadOnlyList<IConversationFlowHandler>>(grouped.Count);
