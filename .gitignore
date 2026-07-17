@@ -57,3 +57,4 @@ nunit-*.xml
 *.db*
 .DS_Store
 .vscode
+*opi.sh
