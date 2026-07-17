@@ -1,6 +1,7 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace WeekChgkSPB.Infrastructure.Notifications;
 
@@ -47,9 +48,25 @@ public class TelegramNotifier : INotifier
             _chatId,
             text,
             ParseMode.Html,
+            replyMarkup: BuildAdminEditKeyboard(announcement.Id),
             linkPreviewOptions: _noPreview,
             cancellationToken: ct);
     }
+
+    internal static InlineKeyboardMarkup BuildAdminEditKeyboard(long announcementId) =>
+        new(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("Название", $"admedit_name_{announcementId}"),
+                InlineKeyboardButton.WithCallbackData("Дата и время", $"admedit_datetime_{announcementId}")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("Площадка", $"admedit_place_{announcementId}"),
+                InlineKeyboardButton.WithCallbackData("Стоимость", $"admedit_cost_{announcementId}")
+            }
+        });
 
     private static string Escape(string s)
     {
