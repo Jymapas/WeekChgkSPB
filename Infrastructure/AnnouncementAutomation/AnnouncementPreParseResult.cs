@@ -10,11 +10,17 @@ internal sealed record AnnouncementPreParseResult(
     string? Place,
     int SourceLength)
 {
+    public bool CanCallApi =>
+        Cost.HasValue &&
+        !string.IsNullOrWhiteSpace(CompactEventText);
+
     public static AnnouncementPreParseResult Failed(
         string failureCode,
         int sourceLength,
         string compactEventText = "",
         int? cost = null,
-        string? costEvidence = null) =>
-        new(false, failureCode, compactEventText, cost, costEvidence, null, null, sourceLength);
+        string? costEvidence = null,
+        DateTime? localDateTime = null,
+        string? place = null) =>
+        new(false, failureCode, compactEventText, cost, costEvidence, localDateTime, place, sourceLength);
 }

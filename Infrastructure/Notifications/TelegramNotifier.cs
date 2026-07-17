@@ -16,19 +16,16 @@ public class TelegramNotifier : INotifier
         _chatId = chatId;
     }
 
-    public async Task NotifyNewPostAsync(Post post, CancellationToken ct = default)
+    public async Task<int> NotifyNewPostAsync(Post post, CancellationToken ct = default)
     {
-        await SendCodeBlock(post.Id.ToString(), ct);
-
-        await SendCodeBlock(post.Title ?? "", ct);
-
-        var body = post.Description ?? "";
-        foreach (var chunk in SplitBy(body, 4000))
-            await SendCodeBlock(chunk, ct);
+        var message = await _bot.SendMessage(
+            _chatId,
+            PostSourceFormatter.Format(post),
+            ParseMode.Html,
+            linkPreviewOptions: _noPreview,
+            cancellationToken: ct);
+        return message.MessageId;
     }
-
-    public Task NotifyAutomationCandidateAsync(Post post, Announcement announcement, CancellationToken ct = default) =>
-        SendAutomationMessageAsync("SHADOW — кандидат не сохранён", post, announcement, ct);
 
     public Task NotifyAutomationSavedAsync(Post post, Announcement announcement, CancellationToken ct = default) =>
         SendAutomationMessageAsync("Анонс добавлен автоматически", post, announcement, ct);
@@ -54,32 +51,9 @@ public class TelegramNotifier : INotifier
             cancellationToken: ct);
     }
 
-    private async Task SendCodeBlock(string text, CancellationToken ct)
-    {
-        var escaped = Escape(text);
-        await _bot.SendMessage(
-            _chatId,
-            $"<code>{escaped}</code>",
-            ParseMode.Html,
-            linkPreviewOptions: _noPreview,
-            cancellationToken: ct);
-        await Task.Delay(500, ct);
-    }
-
     private static string Escape(string s)
     {
         return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
     }
 
-    private static IEnumerable<string> SplitBy(string s, int max)
-    {
-        if (string.IsNullOrEmpty(s))
-        {
-            yield return string.Empty;
-            yield break;
-        }
-
-        for (var i = 0; i < s.Length; i += max)
-            yield return s.Substring(i, Math.Min(max, s.Length - i));
-    }
 }

@@ -9,6 +9,8 @@ internal sealed class AnnouncementAutomationProcessor(
     IAnnouncementExtractionClient extractionClient,
     AnnouncementCandidateValidator validator,
     AnnouncementParseAttemptsRepository attempts,
+    AnnouncementReviewDraftRepository reviewDrafts,
+    AnnouncementReviewHandler reviewHandler,
     PostsRepository posts,
     AnnouncementsRepository announcements,
     IChannelPostUpdater channelPostUpdater,
@@ -24,6 +26,14 @@ internal sealed class AnnouncementAutomationProcessor(
             return isNewPost;
         }
 
+        var existingDraft = reviewDrafts.Get(postId);
+        if (existingDraft is not null &&
+            existingDraft.Status == AnnouncementReviewStatuses.Pending &&
+            (!existingDraft.SourceMessageId.HasValue || !existingDraft.ReviewMessageId.HasValue))
+        {
+            return true;
+        }
+
         return !attempts.Exists(postId);
     }
 
@@ -35,8 +45,16 @@ internal sealed class AnnouncementAutomationProcessor(
             return;
         }
 
+        var existingDraft = reviewDrafts.Get(post.Id);
+        if (existingDraft is not null &&
+            existingDraft.Status == AnnouncementReviewStatuses.Pending)
+        {
+            await reviewHandler.EnsureNotificationAsync(post, existingDraft, cancellationToken);
+            return;
+        }
+
         var preParse = preParser.Parse(post, nowUtc);
-        if (!preParse.Success)
+        if (!preParse.CanCallApi)
         {
             SaveAttempt(post.Id, preParse, null, "fallback", preParse.FailureCode, null);
             await notifier.NotifyNewPostAsync(post, cancellationToken);
@@ -56,9 +74,14 @@ internal sealed class AnnouncementAutomationProcessor(
             cancellationToken);
         if (!extraction.Success || extraction.Candidate is null)
         {
-            SaveAttempt(post.Id, preParse, extraction, "fallback", extraction.FailureCode, null);
-            await notifier.NotifyNewPostAsync(post, cancellationToken);
-            attempts.MarkNotified(post.Id);
+            await CreateReviewAsync(
+                post,
+                preParse,
+                extraction,
+                extraction.FailureCode,
+                null,
+                null,
+                cancellationToken);
             return;
         }
 
@@ -69,25 +92,33 @@ internal sealed class AnnouncementAutomationProcessor(
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            SaveAttempt(post.Id, preParse, extraction, "fallback", "validation_error", extraction.Candidate);
-            await notifier.NotifyNewPostAsync(post, cancellationToken);
-            attempts.MarkNotified(post.Id);
-            return;
-        }
-        if (!validation.Success || validation.Announcement is null)
-        {
-            SaveAttempt(post.Id, preParse, extraction, "fallback", validation.FailureCode, extraction.Candidate);
-            await notifier.NotifyNewPostAsync(post, cancellationToken);
-            attempts.MarkNotified(post.Id);
+            await CreateReviewAsync(
+                post,
+                preParse,
+                extraction,
+                "validation_error",
+                extraction.Candidate,
+                null,
+                cancellationToken);
             return;
         }
 
-        if (options.Mode == AnnouncementAutomationMode.Shadow)
+        if (options.Mode == AnnouncementAutomationMode.Shadow ||
+            !validation.Success ||
+            validation.Announcement is null)
         {
-            SaveAttempt(post.Id, preParse, extraction, "shadow_candidate", null, extraction.Candidate);
-            await notifier.NotifyAutomationCandidateAsync(post, validation.Announcement, cancellationToken);
-            await notifier.NotifyNewPostAsync(post, cancellationToken);
-            attempts.MarkNotified(post.Id);
+            await CreateReviewAsync(
+                post,
+                preParse,
+                extraction,
+                validation.Success
+                    ? null
+                    : validation.FailureCode == "preparse_invalid"
+                        ? preParse.FailureCode
+                        : validation.FailureCode ?? preParse.FailureCode,
+                extraction.Candidate,
+                validation.Announcement,
+                cancellationToken);
             return;
         }
 
@@ -106,6 +137,68 @@ internal sealed class AnnouncementAutomationProcessor(
         await notifier.NotifyAutomationSavedAsync(post, validation.Announcement, cancellationToken);
         attempts.MarkNotified(post.Id);
     }
+
+    private async Task CreateReviewAsync(
+        Post post,
+        AnnouncementPreParseResult preParse,
+        AnnouncementExtractionResult extraction,
+        string? failureCode,
+        AnnouncementExtractionCandidate? candidate,
+        Announcement? validatedAnnouncement,
+        CancellationToken cancellationToken)
+    {
+        var draft = new AnnouncementReviewDraft
+        {
+            PostId = post.Id,
+            TournamentName = validatedAnnouncement?.TournamentName ??
+                             NullIfWhiteSpace(candidate?.TournamentName),
+            Place = validatedAnnouncement?.Place ??
+                    NullIfWhiteSpace(preParse.Place) ??
+                    NullIfWhiteSpace(candidate?.Place),
+            DateTimeUtc = validatedAnnouncement?.DateTimeUtc ??
+                          ResolveDateTimeUtc(preParse.LocalDateTime, candidate?.LocalDateTime),
+            Cost = preParse.Cost,
+            FailureCode = failureCode,
+            Status = AnnouncementReviewStatuses.Pending
+        };
+        reviewDrafts.Upsert(draft);
+        SaveAttempt(
+            post.Id,
+            preParse,
+            extraction,
+            "review_pending",
+            failureCode,
+            candidate);
+        await reviewHandler.EnsureNotificationAsync(post, draft, cancellationToken);
+    }
+
+    private DateTime? ResolveDateTimeUtc(DateTime? localDateTime, string? candidateLocalDateTime)
+    {
+        DateTime local;
+        if (localDateTime.HasValue)
+        {
+            local = DateTime.SpecifyKind(localDateTime.Value, DateTimeKind.Unspecified);
+        }
+        else if (!DateTime.TryParseExact(
+                     candidateLocalDateTime,
+                     ["yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd'T'HH:mm:ss"],
+                     System.Globalization.CultureInfo.InvariantCulture,
+                     System.Globalization.DateTimeStyles.None,
+                     out local))
+        {
+            return null;
+        }
+
+        if (moscowTimeZone.IsInvalidTime(local) || moscowTimeZone.IsAmbiguousTime(local))
+        {
+            return null;
+        }
+
+        return TimeZoneInfo.ConvertTimeToUtc(local, moscowTimeZone);
+    }
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private void SaveAttempt(
         long postId,

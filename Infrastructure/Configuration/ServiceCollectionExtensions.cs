@@ -23,6 +23,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton(new ChannelPostsRepository(settings.DbPath));
         services.AddSingleton(new UserManagementRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementParseAttemptsRepository(settings.DbPath));
+        services.AddSingleton(new AnnouncementReviewDraftRepository(settings.DbPath));
         services.AddSingleton(new RssFetcher(rssUrl));
         services.AddSingleton(settings.AutomationOptions);
         services.AddSingleton(PostFormatter.Moscow);
@@ -57,6 +58,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IConversationFlowHandler, FooterFlow>();
         services.AddSingleton<IConversationFlowHandler>(sp => new PendingEditFlow(
             sp.GetRequiredService<ModerationHandler>()));
+        services.AddSingleton<IConversationFlowHandler, AutomationReviewEditFlow>();
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
         services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
@@ -92,6 +94,16 @@ internal static class ServiceCollectionExtensions
                 sp.GetRequiredService<ITelegramBotClient>(),
                 settings.ChannelId!);
         });
+        services.AddSingleton(sp => new AnnouncementReviewHandler(
+            sp.GetRequiredService<ITelegramBotClient>(),
+            settings.ChatId,
+            sp.GetRequiredService<AnnouncementReviewDraftRepository>(),
+            sp.GetRequiredService<AnnouncementParseAttemptsRepository>(),
+            sp.GetRequiredService<PostsRepository>(),
+            sp.GetRequiredService<AnnouncementsRepository>(),
+            sp.GetRequiredService<IChannelPostUpdater>(),
+            sp.GetRequiredService<BotConversationState>(),
+            sp.GetRequiredService<INotifier>()));
         services.AddSingleton<AnnouncementAutomationProcessor>();
         services.AddSingleton(sp => new BotRunner(
             sp.GetRequiredService<ITelegramBotClient>(),
@@ -104,7 +116,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<BotCommandHelper>(),
             sp.GetRequiredService<BotConversationState>(),
             sp.GetServices<IBotCommandHandler>(),
-            sp.GetServices<IConversationFlowHandler>()));
+            sp.GetServices<IConversationFlowHandler>(),
+            sp.GetRequiredService<AnnouncementReviewHandler>()));
 
         if (settings.HasScheduler)
         {

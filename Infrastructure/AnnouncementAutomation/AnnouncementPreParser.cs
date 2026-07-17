@@ -20,7 +20,11 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
     ];
     private static readonly string[] DiscountMarkers =
     [
-        "студент", "пар", "соло", "трио", "скид", "вторая игра", "вторую игру", "депозит"
+        "скид", "вторая игра", "вторую игру"
+    ];
+    private static readonly string[] ExcludedTariffMarkers =
+    [
+        "студент", "пар", "соло", "трио", "депозит"
     ];
     private static readonly string[] IgnoredPostMarkers =
     [
@@ -55,12 +59,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         @"(?<!\d)(?<amount>\d[\d ]{2,5})\s*(?:руб(?:\.|лей|ля)?|₽)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
-    private static readonly Regex FullTeamRegex = new(
-        @"(?:до\s*)?6(?:\s*[-–—]?\s*(?:ти|х))?\s*(?:чел(?:овек)?|игрок)",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-        RegexTimeout);
-    private static readonly Regex SmallTeamRegex = new(
-        @"(?:до|из)?\s*[1-3]\s*(?:-?х)?\s*(?:чел(?:овек)?|игрок)",
+    private static readonly Regex TeamCapacityRegex = new(
+        @"(?:до|из)?\s*(?<capacity>[1-6])(?:\s*[-–—]?\s*(?:ти|х))?\s*(?:чел(?:овек(?:а|у|ом)?|овек)?|игрок(?:а|ов)?)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex QuotedVenueRegex = new(
@@ -106,6 +106,9 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                 : $"{title}\n{eventLine}";
 
             var price = ParseCost(lines);
+            var hasLocalDateTime = TryParseLocalDateTime(title, eventLine, nowUtc, out var localDateTime);
+            var place = TryParsePlace(compactEventText);
+
             if (!price.Success)
             {
                 return AnnouncementPreParseResult.Failed(
@@ -113,20 +116,22 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     sourceLength,
                     compactEventText,
                     price.Cost,
-                    price.Evidence);
+                    price.Evidence,
+                    hasLocalDateTime ? localDateTime : null,
+                    place);
             }
 
-            if (!TryParseLocalDateTime(title, eventLine, nowUtc, out var localDateTime))
+            if (!hasLocalDateTime)
             {
                 return AnnouncementPreParseResult.Failed(
                     "datetime_not_found",
                     sourceLength,
                     compactEventText,
                     price.Cost,
-                    price.Evidence);
+                    price.Evidence,
+                    place: place);
             }
 
-            var place = TryParsePlace(compactEventText);
             if (string.IsNullOrWhiteSpace(place))
             {
                 return AnnouncementPreParseResult.Failed(
@@ -134,7 +139,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     sourceLength,
                     compactEventText,
                     price.Cost,
-                    price.Evidence);
+                    price.Evidence,
+                    localDateTime);
             }
 
             return new AnnouncementPreParseResult(
@@ -239,7 +245,7 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             return (false, "cost_not_found", null, null);
         }
 
-        var candidates = new List<(int Cost, string Evidence)>();
+        var candidates = new List<(int Cost, string Evidence, int? Capacity)>();
         for (var i = start; i < lines.Count; i++)
         {
             var line = lines[i];
@@ -249,7 +255,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             }
 
             var money = MoneyRegex.Match(line);
-            if (!money.Success || !IsFullTeamPrice(line, money.Index, i == start))
+            if (!money.Success ||
+                !TryGetTeamCapacity(line, money.Index, i == start, out var capacity))
             {
                 continue;
             }
@@ -257,11 +264,20 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             var amountText = money.Groups["amount"].Value.Replace(" ", string.Empty, StringComparison.Ordinal);
             if (int.TryParse(amountText, NumberStyles.None, CultureInfo.InvariantCulture, out var amount) && amount > 0)
             {
-                candidates.Add((amount, line));
+                candidates.Add((amount, line, capacity));
             }
         }
 
-        var distinct = candidates.DistinctBy(candidate => candidate.Cost).ToList();
+        var maximumCapacity = candidates
+            .Where(candidate => candidate.Capacity.HasValue)
+            .Select(candidate => candidate.Capacity!.Value)
+            .DefaultIfEmpty()
+            .Max();
+        var eligible = maximumCapacity > 0
+            ? candidates.Where(candidate =>
+                !candidate.Capacity.HasValue || candidate.Capacity == maximumCapacity)
+            : candidates;
+        var distinct = eligible.DistinctBy(candidate => candidate.Cost).ToList();
         return distinct.Count switch
         {
             0 => (false, "cost_not_found", null, null),
@@ -270,28 +286,40 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         };
     }
 
-    private static bool IsFullTeamPrice(string line, int moneyIndex, bool isHeadingLine)
+    private static bool TryGetTeamCapacity(
+        string line,
+        int moneyIndex,
+        bool isHeadingLine,
+        out int? capacity)
     {
         var lower = line.ToLowerInvariant();
         var hasTeam = lower.Contains("команд", StringComparison.Ordinal);
-        if (!hasTeam)
+        if (ExcludedTariffMarkers.Any(marker => lower.Contains(marker, StringComparison.Ordinal)))
         {
-            return isHeadingLine && line.StartsWith("взнос", StringComparison.OrdinalIgnoreCase) &&
-                   !DiscountMarkers.Any(marker => lower.Contains(marker, StringComparison.Ordinal));
+            capacity = null;
+            return false;
         }
 
         var prefix = lower[..Math.Min(moneyIndex, lower.Length)];
         if (DiscountMarkers.Any(marker => prefix.Contains(marker, StringComparison.Ordinal)))
         {
+            capacity = null;
             return false;
         }
 
-        if (FullTeamRegex.IsMatch(lower))
+        var capacityMatch = TeamCapacityRegex.Match(lower);
+        if (capacityMatch.Success &&
+            int.TryParse(capacityMatch.Groups["capacity"].Value, out var parsedCapacity))
         {
-            return true;
+            capacity = parsedCapacity;
+            return parsedCapacity >= 4 && (hasTeam || isHeadingLine || moneyIndex < capacityMatch.Index);
         }
 
-        return !SmallTeamRegex.IsMatch(lower);
+        capacity = null;
+        return hasTeam ||
+               (isHeadingLine &&
+                line.StartsWith("взнос", StringComparison.OrdinalIgnoreCase) &&
+                !DiscountMarkers.Any(marker => lower.Contains(marker, StringComparison.Ordinal)));
     }
 
     private bool TryParseLocalDateTime(string title, string eventLine, DateTime nowUtc, out DateTime localDateTime)

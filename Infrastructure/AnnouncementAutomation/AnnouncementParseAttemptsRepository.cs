@@ -52,6 +52,22 @@ internal sealed class AnnouncementParseAttemptsRepository
     public void MarkChannelUpdated(long postId) => Mark(postId, "channel_updated_at_utc");
     public void MarkNotified(long postId) => Mark(postId, "notified_at_utc");
 
+    public void SetOutcome(long postId, string outcome, string? failureCode = null)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            UPDATE announcement_parse_attempts
+            SET outcome=@outcome, failure_code=@failureCode
+            WHERE post_id=@postId
+            """;
+        command.Parameters.AddWithValue("@outcome", outcome);
+        command.Parameters.AddWithValue("@failureCode", failureCode is null ? DBNull.Value : failureCode);
+        command.Parameters.AddWithValue("@postId", postId);
+        command.ExecuteNonQuery();
+    }
+
     public bool Exists(long postId)
     {
         using var connection = Open();

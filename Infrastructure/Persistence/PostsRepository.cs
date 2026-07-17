@@ -106,6 +106,29 @@ public class PostsRepository
         return count > 0;
     }
 
+    public Post? Get(long id)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT id, title, link, description FROM posts WHERE id=@id";
+        command.Parameters.AddWithValue("@id", id);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        return new Post
+        {
+            Id = reader.GetInt64(0),
+            Title = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+            Link = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+            Description = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
+        };
+    }
+
     public bool TryGetIdByLink(string link, out long id)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");

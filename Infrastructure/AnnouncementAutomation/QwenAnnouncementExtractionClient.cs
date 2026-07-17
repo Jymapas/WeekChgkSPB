@@ -20,7 +20,7 @@ internal sealed class QwenAnnouncementExtractionClient(
         {
           "rawTournamentName": "exact tournament name from the event text",
           "tournamentName": "normalized tournament name consistent with the examples",
-          "place": "venue from the event text",
+          "place": "bare venue name from the event text, without venue type, address, or metro details",
           "localDateTime": "YYYY-MM-DDTHH:mm in Moscow time",
           "evidence": {
             "tournamentName": "exact substring from the event text",

@@ -4,6 +4,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using Telegram.Bot;
+using Telegram.Bot.Requests.Abstractions;
+using Telegram.Bot.Types;
+using WeekChgkSPB.Infrastructure.Bot;
 using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 using WeekChgkSPB.Infrastructure.Notifications;
 
@@ -31,7 +35,7 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
     }
 
     [Fact]
-    public async Task Shadow_ShowsCandidateThenKeepsManualFlowWithoutSaving()
+    public async Task Shadow_CreatesCompleteReviewDraftWithoutSaving()
     {
         var context = CreateContext(AnnouncementAutomationMode.Shadow);
         var post = CreatePost(101, "Команда — 1900 ₽");
@@ -40,7 +44,10 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
 
         Assert.Null(context.Announcements.Get(post.Id));
-        context.Notifier.Verify(notifier => notifier.NotifyAutomationCandidateAsync(post, It.Is<Announcement>(a => a.Cost == 1900), It.IsAny<CancellationToken>()), Times.Once);
+        var draft = context.Drafts.Get(post.Id);
+        Assert.NotNull(draft);
+        Assert.True(draft!.IsComplete);
+        Assert.Equal(1900, draft.Cost);
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
         context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
         Assert.False(context.Processor.ShouldProcessPost(post.Id, isNewPost: false));
@@ -71,6 +78,54 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task ApiFailure_WithLocalPrice_CreatesIncompleteReviewDraft()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        context.Extraction.Result = AnnouncementExtractionResult.Failed("api_timeout", 120);
+        var post = CreatePost(104, "Команда до 6 человек — 1800 ₽");
+        context.Posts.Insert(post);
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Null(context.Announcements.Get(post.Id));
+        var draft = context.Drafts.Get(post.Id);
+        Assert.NotNull(draft);
+        Assert.Null(draft!.TournamentName);
+        Assert.Equal("Rossi's", draft.Place);
+        Assert.Equal(1800, draft.Cost);
+        Assert.False(draft.IsComplete);
+        context.Notifier.Verify(
+            notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task MissingLocalPlace_WithPrice_StillCallsApiAndCreatesReview()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        var post = new Post
+        {
+            Id = 105,
+            Link = "https://chgk-spb.livejournal.com/105.html",
+            Title = "Кубок знаний 12 июля в 19:30",
+            Description =
+                "12 июля в 19:30 турнир «Кубок знаний»<br>" +
+                "Стоимость турнира<br>Команда до 6 человек — 1800 ₽"
+        };
+        context.Posts.Insert(post);
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Equal(1, context.Extraction.CallCount);
+        Assert.Null(context.Announcements.Get(post.Id));
+        var draft = context.Drafts.Get(post.Id);
+        Assert.NotNull(draft);
+        Assert.Equal("Rossi's", draft!.Place);
+        Assert.True(draft.IsComplete);
+        Assert.Equal("place_not_found", draft.FailureCode);
+    }
+
     [Theory]
     [InlineData("Перенос площадки")]
     [InlineData("Продолжается регистрация")]
@@ -86,8 +141,6 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         Assert.Equal(0, context.Extraction.CallCount);
         Assert.Null(context.Announcements.Get(post.Id));
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
-        context.Notifier.Verify(notifier => notifier.NotifyAutomationCandidateAsync(
-            It.IsAny<Post>(), It.IsAny<Announcement>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     public void Dispose()
@@ -100,9 +153,28 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         var posts = new PostsRepository(_dbPath);
         var announcements = new AnnouncementsRepository(_dbPath);
         var attempts = new AnnouncementParseAttemptsRepository(_dbPath);
+        var drafts = new AnnouncementReviewDraftRepository(_dbPath);
         var extraction = new FakeExtractionClient();
         var notifier = new Mock<INotifier>();
+        notifier
+            .Setup(n => n.NotifyNewPostAsync(It.IsAny<Post>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(11);
         var channel = new Mock<IChannelPostUpdater>();
+        var bot = new Mock<ITelegramBotClient>();
+        bot.Setup(b => b.SendRequest<Message>(
+                It.IsAny<IRequest<Message>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Message());
+        var reviewHandler = new AnnouncementReviewHandler(
+            bot.Object,
+            1,
+            drafts,
+            attempts,
+            posts,
+            announcements,
+            channel.Object,
+            new BotConversationState(),
+            notifier.Object);
         var options = new AnnouncementAutomationOptions(
             mode, new Uri("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/"), "key",
             AnnouncementAutomationOptions.DefaultModel, TimeSpan.FromSeconds(30));
@@ -113,12 +185,14 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
             extraction,
             new AnnouncementCandidateValidator(normalizer, PostFormatter.Moscow),
             attempts,
+            drafts,
+            reviewHandler,
             posts,
             announcements,
             channel.Object,
             notifier.Object,
             PostFormatter.Moscow);
-        return new ProcessorContext(processor, posts, announcements, extraction, notifier, channel);
+        return new ProcessorContext(processor, posts, announcements, drafts, extraction, notifier, channel);
     }
 
     private static Post CreatePost(long id, string prices) => new()
@@ -138,6 +212,7 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         AnnouncementAutomationProcessor Processor,
         PostsRepository Posts,
         AnnouncementsRepository Announcements,
+        AnnouncementReviewDraftRepository Drafts,
         FakeExtractionClient Extraction,
         Mock<INotifier> Notifier,
         Mock<IChannelPostUpdater> Channel);
@@ -145,6 +220,8 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
     private sealed class FakeExtractionClient : IAnnouncementExtractionClient
     {
         public int CallCount { get; private set; }
+        public AnnouncementExtractionResult Result { get; set; } =
+            new(true, null, Candidate, 100, 40, 180);
 
         public Task<AnnouncementExtractionResult> ExtractAsync(
             Post post,
@@ -154,7 +231,7 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
             CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult(new AnnouncementExtractionResult(true, null, Candidate, 100, 40, 180));
+            return Task.FromResult(Result);
         }
     }
 }

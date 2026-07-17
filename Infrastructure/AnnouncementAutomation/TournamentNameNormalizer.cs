@@ -23,7 +23,7 @@ internal sealed class TournamentNameNormalizer
         RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex TrailingNumberRegex = new(
-        @"\s*[—–-]\s*(?<number>\d+)\s*$",
+        @"\s*[—–-]\s*(?<number>\d+(?:[,.]\d+)?)\s*$",
         RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex RomanSuffixRegex = new(

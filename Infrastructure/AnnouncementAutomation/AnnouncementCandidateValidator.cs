@@ -42,7 +42,7 @@ internal sealed class AnnouncementCandidateValidator(
         }
 
         var expectedPlace = AnnouncementPreParser.NormalizePlace(preParse.Place);
-        var actualPlace = AnnouncementPreParser.NormalizePlace(candidate.Place);
+        var actualPlace = NormalizeCandidatePlace(candidate.Place);
         if (!string.Equals(expectedPlace, actualPlace, StringComparison.OrdinalIgnoreCase) ||
             !ContainsEvidence(preParse.CompactEventText, candidate.Evidence.Place))
         {
@@ -81,4 +81,37 @@ internal sealed class AnnouncementCandidateValidator(
     private static bool ContainsEvidence(string source, string? evidence) =>
         !string.IsNullOrWhiteSpace(evidence) &&
         source.Contains(evidence.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeCandidatePlace(string value)
+    {
+        var trimmed = value.Trim();
+        var quoteStart = trimmed.IndexOfAny(['"', '«']);
+        if (quoteStart >= 0)
+        {
+            var closingQuote = trimmed[quoteStart] == '«' ? '»' : '"';
+            var quoteEnd = trimmed.IndexOf(closingQuote, quoteStart + 1);
+            if (quoteEnd > quoteStart + 1)
+            {
+                return AnnouncementPreParser.NormalizePlace(
+                    trimmed[(quoteStart + 1)..quoteEnd]);
+            }
+        }
+
+        var venueName = trimmed.Split(',', 2, StringSplitOptions.TrimEntries)[0];
+        var prefixes = new[]
+        {
+            "на площадке ", "площадка ", "в ресторане ", "ресторан ",
+            "в клубе ", "клубе ", "клуб ", "в кафе ", "кафе ", "в баре ", "бар "
+        };
+        foreach (var prefix in prefixes)
+        {
+            if (venueName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                venueName = venueName[prefix.Length..].Trim();
+                break;
+            }
+        }
+
+        return AnnouncementPreParser.NormalizePlace(venueName);
+    }
 }

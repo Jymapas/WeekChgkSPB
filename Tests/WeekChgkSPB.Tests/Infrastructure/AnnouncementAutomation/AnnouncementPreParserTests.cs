@@ -36,6 +36,53 @@ public sealed class AnnouncementPreParserTests
         Assert.Equal("cost_ambiguous", result.FailureCode);
     }
 
+    [Fact]
+    public void Parse_SelectsPriceForLargestExplicitTeamCapacity()
+    {
+        var post = CreatePost(
+            "Стоимость<br>" +
+            "1950 руб с команды до 6ти человек<br>" +
+            "1800 руб с команды до 5ти человек<br>" +
+            "1650 рублей - 4 человека<br>" +
+            "1500 рублей - 3 человека");
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.True(result.Success, result.FailureCode);
+        Assert.Equal(1950, result.Cost);
+        Assert.Equal("1950 руб с команды до 6ти человек", result.CostEvidence);
+    }
+
+    [Fact]
+    public void Parse_RejectsDifferentPricesForSameLargestCapacity()
+    {
+        var post = CreatePost(
+            "Стоимость<br>" +
+            "Команда до 6 человек — 1800 ₽<br>" +
+            "Команда до 6 человек — 2000 ₽<br>" +
+            "Команда до 5 человек — 1700 ₽");
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.False(result.Success);
+        Assert.Equal("cost_ambiguous", result.FailureCode);
+    }
+
+    [Fact]
+    public void Parse_RejectsGenericTeamPriceCompetingWithLargestCapacity()
+    {
+        var post = CreatePost(
+            "Стоимость<br>" +
+            "Команда — 1800 ₽<br>" +
+            "Команда до 6 человек — 2000 ₽<br>" +
+            "Команда до 5 человек — 1700 ₽");
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.False(result.Success);
+        Assert.Equal("cost_ambiguous", result.FailureCode);
+    }
+
     [Theory]
     [InlineData("Перенос площадки")]
     [InlineData("ПРОДОЛЖАЕТСЯ РЕГИСТРАЦИЯ")]
@@ -76,6 +123,7 @@ public sealed class AnnouncementPreParserTests
     [InlineData("Стоимость<br>По договорённости")]
     [InlineData("Депозит 1000 ₽")]
     [InlineData("Стоимость<br>Команда студентов до 6 человек — 1200 ₽")]
+    [InlineData("Стоимость<br>1200 ₽ с команды студентов до 6 человек")]
     [InlineData("Стоимость<br>Команда из 3 человек — 1200 ₽")]
     public void Parse_RejectsUnsupportedOrMissingCost(string costBlock)
     {
@@ -83,6 +131,27 @@ public sealed class AnnouncementPreParserTests
 
         Assert.False(result.Success);
         Assert.Equal("cost_not_found", result.FailureCode);
+    }
+
+    [Fact]
+    public void Parse_AllowsApiWhenPriceAndEventExistButPlaceIsMissing()
+    {
+        var post = new Post
+        {
+            Id = 44,
+            Title = "Турнир «Кубок знаний» 12 июля в 19:30",
+            Description =
+                "12 июля в 19:30 турнир «Кубок знаний»<br>" +
+                "Стоимость<br>Команда до 6 человек — 1800 ₽"
+        };
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.False(result.Success);
+        Assert.Equal("place_not_found", result.FailureCode);
+        Assert.True(result.CanCallApi);
+        Assert.Equal(1800, result.Cost);
+        Assert.NotNull(result.LocalDateTime);
     }
 
     private static Post CreatePost(string costBlock) => new()
