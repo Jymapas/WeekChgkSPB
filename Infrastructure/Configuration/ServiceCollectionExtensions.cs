@@ -61,6 +61,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IConversationFlowHandler, AutomationReviewEditFlow>();
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePostLJ, true));
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
+        services.AddSingleton<IBotCommandHandler>(sp => new ForcePostCommandHandler(settings.ChannelId));
         services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
         services.AddSingleton<IBotCommandHandler, CancelCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
@@ -105,6 +106,12 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<BotConversationState>(),
             sp.GetRequiredService<INotifier>()));
         services.AddSingleton<AnnouncementAutomationProcessor>();
+        services.AddSingleton(sp => new ForcePostHandler(
+            sp.GetRequiredService<AnnouncementsRepository>(),
+            sp.GetRequiredService<FootersRepository>(),
+            sp.GetRequiredService<ChannelPostsRepository>(),
+            sp.GetRequiredService<ITelegramBotClient>(),
+            settings.ChannelId));
         services.AddSingleton(sp => new BotRunner(
             sp.GetRequiredService<ITelegramBotClient>(),
             settings.ChatId,
@@ -117,7 +124,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<BotConversationState>(),
             sp.GetServices<IBotCommandHandler>(),
             sp.GetServices<IConversationFlowHandler>(),
-            sp.GetRequiredService<AnnouncementReviewHandler>()));
+            sp.GetRequiredService<AnnouncementReviewHandler>(),
+            sp.GetRequiredService<ForcePostHandler>()));
 
         if (settings.HasScheduler)
         {

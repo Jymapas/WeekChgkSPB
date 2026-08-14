@@ -20,6 +20,7 @@ internal class BotRunner
     private readonly UserManagementRepository _userManagement;
     private readonly ModerationHandler _moderationHandler;
     private readonly AnnouncementReviewHandler? _announcementReviewHandler;
+    private readonly ForcePostHandler? _forcePostHandler;
     private readonly BotCommandHelper _helper;
     private readonly BotConversationState _stateStore;
     private readonly IReadOnlyList<IBotCommandHandler> _handlers;
@@ -37,7 +38,8 @@ internal class BotRunner
         BotConversationState stateStore,
         IEnumerable<IBotCommandHandler> handlers,
         IEnumerable<IConversationFlowHandler> flows,
-        AnnouncementReviewHandler? announcementReviewHandler = null)
+        AnnouncementReviewHandler? announcementReviewHandler = null,
+        ForcePostHandler? forcePostHandler = null)
     {
         _bot = bot;
         _allowedChatId = allowedChatId;
@@ -47,6 +49,7 @@ internal class BotRunner
         _userManagement = userManagement;
         _moderationHandler = moderationHandler;
         _announcementReviewHandler = announcementReviewHandler;
+        _forcePostHandler = forcePostHandler;
         _helper = helper;
         _stateStore = stateStore;
         _handlers = handlers.ToList();
@@ -123,6 +126,12 @@ internal class BotRunner
 
         if (_announcementReviewHandler is not null &&
             await _announcementReviewHandler.HandleCallbackQuery(callbackQuery, ct))
+        {
+            return;
+        }
+
+        if (_forcePostHandler is not null &&
+            await _forcePostHandler.HandleCallbackQuery(callbackQuery, ct))
         {
             return;
         }
