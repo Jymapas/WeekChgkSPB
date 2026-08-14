@@ -8,6 +8,7 @@ public static class BotCommands
 {
     public const string MakePostLJ = "/makepostlj";
     public const string MakePost = "/makepost";
+    public const string ForcePost = "/force_post";
     public const string Add = "/add";
     public const string AddLines = "/add_lines";
     public const string Help = "/help";
@@ -27,6 +28,7 @@ public static class BotCommands
     [
         MakePostLJ,
         MakePost,
+        ForcePost,
         FooterAdd,
         FooterList,
         FooterDel,
@@ -57,6 +59,7 @@ public static class BotCommands
     {
         [MakePost] = "Создать пост",
         [MakePostLJ] = "Создать пост для LiveJournal",
+        [ForcePost] = "Опубликовать пост в канал сейчас",
         [Add] = "Добавить анонс единым блоком",
         [AddLines] = "Добавить анонс по шагам",
         [Help] = "Справка по командам",

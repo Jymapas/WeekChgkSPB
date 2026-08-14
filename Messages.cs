@@ -139,6 +139,16 @@ internal static class Messages
         internal const string NoAnnouncements = "В выбранном диапазоне анонсов нет";
     }
 
+    internal static class ForcePost
+    {
+        internal const string NoChannel = "Канал не настроен";
+        internal const string NoAnnouncements = "На сегодня анонсов нет — публиковать нечего";
+        internal const string ButtonAccept = "✅ Принять";
+        internal const string ButtonCancel = "❌ Отменить";
+        internal const string Published = "\n\n✅ Опубликовано в канал";
+        internal const string Cancelled = "\n\n🚫 Отменено";
+    }
+
     internal static class Moderation
     {
         internal const string RequestNotFound = "Заявка не найдена";
