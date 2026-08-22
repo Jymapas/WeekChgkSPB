@@ -87,6 +87,7 @@ internal class Program
             cancellationToken: cts.Token);
         botRunner.Start(cts.Token);
 
+        await automationProcessor.ReconcileVenueChangesAsync(DateTime.UtcNow, cts.Token);
         await CheckOnceAsync(fetcher, repo, announcementsRepo, automationProcessor, cts.Token);
         var lastRssCheck = DateTime.UtcNow;
 
@@ -134,6 +135,7 @@ internal class Program
             foreach (var post in feedPosts.Where(p => p.Id != 0))
             {
                 var isNewPost = !repo.Exists(post.Id);
+                var isVenueChange = AnnouncementPreParser.IsVenueChange(post);
                 var hasAnnouncement = announcementsRepo.Exists(post.Id);
                 if (!hasAnnouncement && !string.IsNullOrWhiteSpace(post.Link))
                 {
@@ -145,12 +147,12 @@ internal class Program
                     repo.Insert(post);
                 }
 
-                if (hasAnnouncement)
+                if (hasAnnouncement && !isVenueChange)
                 {
                     continue;
                 }
 
-                if (!automationProcessor.ShouldProcessPost(post.Id, isNewPost))
+                if (!automationProcessor.ShouldProcessPost(post.Id, isNewPost, isVenueChange))
                 {
                     continue;
                 }

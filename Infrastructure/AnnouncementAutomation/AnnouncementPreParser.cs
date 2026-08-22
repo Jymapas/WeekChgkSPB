@@ -26,9 +26,14 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
     [
         "студент", "пар", "соло", "трио", "депозит"
     ];
-    private static readonly string[] IgnoredPostMarkers =
+    private static readonly string[] VenueChangeMarkers =
     [
         "перенос площадки",
+        "замена площадки",
+        "смена площадки"
+    ];
+    private static readonly string[] IgnoredPostMarkers =
+    [
         "продолжается регистрация"
     ];
     private static readonly Regex TagsRegex = new(
@@ -84,6 +89,9 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         {
             var title = CleanInline(post.Title);
             var body = CleanBody(post.Description);
+            var isVenueChange = VenueChangeMarkers.Any(marker =>
+                title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
+                body.Contains(marker, StringComparison.OrdinalIgnoreCase));
             if (IgnoredPostMarkers.Any(marker =>
                     title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
                     body.Contains(marker, StringComparison.OrdinalIgnoreCase)))
@@ -118,7 +126,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     price.Cost,
                     price.Evidence,
                     hasLocalDateTime ? localDateTime : null,
-                    place);
+                    place,
+                    isVenueChange);
             }
 
             if (!hasLocalDateTime)
@@ -129,7 +138,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     compactEventText,
                     price.Cost,
                     price.Evidence,
-                    place: place);
+                    place: place,
+                    isVenueChange: isVenueChange);
             }
 
             if (string.IsNullOrWhiteSpace(place))
@@ -140,7 +150,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     compactEventText,
                     price.Cost,
                     price.Evidence,
-                    localDateTime);
+                    localDateTime,
+                    isVenueChange: isVenueChange);
             }
 
             return new AnnouncementPreParseResult(
@@ -151,11 +162,33 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                 price.Evidence,
                 localDateTime,
                 place,
-                sourceLength);
+                sourceLength,
+                isVenueChange);
         }
         catch (RegexMatchTimeoutException)
         {
             return AnnouncementPreParseResult.Failed("regex_timeout", sourceLength);
+        }
+    }
+
+    public static bool IsVenueChange(Post post)
+    {
+        if ((post.Title?.Length ?? 0) + (post.Description?.Length ?? 0) > MaxSourceLength)
+        {
+            return false;
+        }
+
+        try
+        {
+            var title = CleanInline(post.Title);
+            var body = CleanBody(post.Description);
+            return VenueChangeMarkers.Any(marker =>
+                title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
+                body.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
         }
     }
 

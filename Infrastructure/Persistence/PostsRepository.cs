@@ -129,6 +129,37 @@ public class PostsRepository
         };
     }
 
+    public IReadOnlyList<Post> GetVenueChangePosts()
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, title, link, description
+            FROM posts
+            ORDER BY id
+            """;
+        using var reader = command.ExecuteReader();
+        var posts = new List<Post>();
+        while (reader.Read())
+        {
+            var post = new Post
+            {
+                Id = reader.GetInt64(0),
+                Title = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                Link = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                Description = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
+            };
+            if (AnnouncementPreParser.IsVenueChange(post))
+            {
+                posts.Add(post);
+            }
+        }
+
+        return posts;
+    }
+
     public bool TryGetIdByLink(string link, out long id)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");

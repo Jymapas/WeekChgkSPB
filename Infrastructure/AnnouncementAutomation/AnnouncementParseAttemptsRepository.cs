@@ -77,6 +77,26 @@ internal sealed class AnnouncementParseAttemptsRepository
         return (long)command.ExecuteScalar()! == 1;
     }
 
+    public bool HasOutcomePrefix(long postId, string prefix)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT outcome FROM announcement_parse_attempts WHERE post_id=@postId";
+        command.Parameters.AddWithValue("@postId", postId);
+        return command.ExecuteScalar() is string outcome &&
+               outcome.StartsWith(prefix, StringComparison.Ordinal);
+    }
+
+    public bool WasNotified(long postId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT notified_at_utc IS NOT NULL FROM announcement_parse_attempts WHERE post_id=@postId";
+        command.Parameters.AddWithValue("@postId", postId);
+        return command.ExecuteScalar() is long value && value == 1;
+    }
+
     private void EnsureCreated()
     {
         var directory = Path.GetDirectoryName(_dbPath);

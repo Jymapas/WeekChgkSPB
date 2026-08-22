@@ -83,18 +83,32 @@ public sealed class AnnouncementPreParserTests
         Assert.Equal("cost_ambiguous", result.FailureCode);
     }
 
+    [Fact]
+    public void Parse_RejectsRegistrationUpdateBeforeExtraction()
+    {
+        var post = CreatePost("Стоимость<br>Команда — 1800 ₽");
+        post.Description = $"<strong>ПРОДОЛЖАЕТСЯ РЕГИСТРАЦИЯ</strong><br>{post.Description}";
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.False(result.Success);
+        Assert.Equal("post_update_ignored", result.FailureCode);
+    }
+
     [Theory]
     [InlineData("Перенос площадки")]
-    [InlineData("ПРОДОЛЖАЕТСЯ РЕГИСТРАЦИЯ")]
-    public void Parse_RejectsUpdatePostsBeforeExtraction(string marker)
+    [InlineData("Замена площадки")]
+    [InlineData("Смена площадки")]
+    public void Parse_RecognizesVenueChangeAndKeepsExtractionData(string marker)
     {
         var post = CreatePost("Стоимость<br>Команда — 1800 ₽");
         post.Description = $"<strong>{marker}</strong><br>{post.Description}";
 
         var result = _parser.Parse(post, Now);
 
-        Assert.False(result.Success);
-        Assert.Equal("post_update_ignored", result.FailureCode);
+        Assert.True(result.Success, result.FailureCode);
+        Assert.True(result.IsVenueChange);
+        Assert.Equal("Rossi's", result.Place);
     }
 
     [Fact]

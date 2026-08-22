@@ -126,14 +126,12 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         Assert.Equal("place_not_found", draft.FailureCode);
     }
 
-    [Theory]
-    [InlineData("Перенос площадки")]
-    [InlineData("Продолжается регистрация")]
-    public async Task UpdatePost_FallsBackWithoutCallingApi(string marker)
+    [Fact]
+    public async Task RegistrationUpdate_FallsBackWithoutCallingApi()
     {
         var context = CreateContext(AnnouncementAutomationMode.Shadow);
         var post = CreatePost(103, "Команда — 1800 ₽");
-        post.Title = $"{marker}: Кубок знаний";
+        post.Title = "Продолжается регистрация: Кубок знаний";
         context.Posts.Insert(post);
 
         await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
@@ -141,6 +139,100 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         Assert.Equal(0, context.Extraction.CallCount);
         Assert.Null(context.Announcements.Get(post.Id));
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("Перенос площадки")]
+    [InlineData("Замена площадки")]
+    [InlineData("Смена площадки")]
+    public async Task Shadow_VenueChange_IsAuditedAndNotApplied(string marker)
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Shadow);
+        var source = CreateAnnouncement(90, "Rossi's", 1800);
+        context.Announcements.Insert(source);
+        var post = CreateVenueChangePost(103, marker);
+        context.Posts.Insert(post);
+        context.Extraction.Result = SuccessfulVenueChangeExtraction();
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Equal("Rossi's", context.Announcements.Get(source.Id)!.Place);
+        Assert.Null(context.Announcements.Get(post.Id));
+        Assert.Equal(1, context.Extraction.CallCount);
+        context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Active_VenueChange_ReplacesFieldsAndRssId()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        context.Announcements.Insert(CreateAnnouncement(90, "Rossi's", 1800));
+        var post = CreateVenueChangePost(103, "Перенос площадки");
+        context.Posts.Insert(post);
+        context.Extraction.Result = SuccessfulVenueChangeExtraction();
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Null(context.Announcements.Get(90));
+        var updated = context.Announcements.Get(103);
+        Assert.NotNull(updated);
+        Assert.Equal("Carrot", updated!.Place);
+        Assert.Equal(2100, updated.Cost);
+        context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Active_VenueChange_MergesExistingCorrectionDuplicate()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        context.Announcements.Insert(CreateAnnouncement(90, "Rossi's", 1800));
+        context.Announcements.Insert(CreateAnnouncement(103, "Carrot", 2100));
+        var post = CreateVenueChangePost(103, "Замена площадки");
+        context.Posts.Insert(post);
+        context.Extraction.Result = SuccessfulVenueChangeExtraction();
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Null(context.Announcements.Get(90));
+        Assert.Equal("Carrot", context.Announcements.Get(103)!.Place);
+        context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Active_VenueChange_WithAmbiguousMatch_DoesNotChangeAnnouncementsOrNotifyTwice()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        context.Announcements.Insert(CreateAnnouncement(90, "Rossi's", 1800));
+        context.Announcements.Insert(CreateAnnouncement(91, "Other", 1800));
+        var post = CreateVenueChangePost(103, "Смена площадки");
+        context.Posts.Insert(post);
+        context.Extraction.Result = SuccessfulVenueChangeExtraction();
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Equal("Rossi's", context.Announcements.Get(90)!.Place);
+        Assert.Equal("Other", context.Announcements.Get(91)!.Place);
+        Assert.Null(context.Announcements.Get(103));
+        context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReconcileVenueChangesAsync_IsIdempotent()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        context.Announcements.Insert(CreateAnnouncement(90, "Rossi's", 1800));
+        var post = CreateVenueChangePost(103, "Перенос площадки");
+        context.Posts.Insert(post);
+        context.Extraction.Result = SuccessfulVenueChangeExtraction();
+
+        await context.Processor.ReconcileVenueChangesAsync(Now, CancellationToken.None);
+        await context.Processor.ReconcileVenueChangesAsync(Now, CancellationToken.None);
+
+        Assert.NotNull(context.Announcements.Get(103));
+        Assert.Equal(1, context.Extraction.CallCount);
+        context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     public void Dispose()
@@ -202,6 +294,36 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         Title = "Кубок знаний 12 июля в 19:30",
         Description = $"12 июля в 19:30 турнир «Кубок знаний» в клубе «Rossi's»<br>Стоимость турнира<br>{prices}<br>Депозит 500 ₽"
     };
+
+    private static Post CreateVenueChangePost(long id, string marker) => new()
+    {
+        Id = id,
+        Link = $"https://chgk-spb.livejournal.com/{id}.html",
+        Title = $"Внимание! {marker}! Кубок знаний 12 июля в 19:30",
+        Description = $"{marker}!<br>12 июля в 19:30 турнир «Кубок знаний» пройдет в кафе «Carrot»<br>Стоимость турнира<br>Команда до 6 человек — 2100 ₽"
+    };
+
+    private static Announcement CreateAnnouncement(long id, string place, int cost) => new()
+    {
+        Id = id,
+        TournamentName = "Кубок знаний",
+        Place = place,
+        DateTimeUtc = new DateTime(2026, 7, 12, 16, 30, 0, DateTimeKind.Utc),
+        Cost = cost
+    };
+
+    private static AnnouncementExtractionResult SuccessfulVenueChangeExtraction() => new(
+        true,
+        null,
+        new AnnouncementExtractionCandidate(
+            "Кубок знаний",
+            "Кубок знаний",
+            "Carrot",
+            "2026-07-12T19:30",
+            new AnnouncementExtractionEvidence("Кубок знаний", "Carrot", "12 июля в 19:30")),
+        100,
+        40,
+        180);
 
     private static readonly DateTime Now = new(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc);
     private static readonly AnnouncementExtractionCandidate Candidate = new(

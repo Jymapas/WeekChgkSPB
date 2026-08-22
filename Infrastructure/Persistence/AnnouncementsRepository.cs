@@ -295,6 +295,120 @@ public class AnnouncementsRepository
         cmd.ExecuteNonQuery();
     }
 
+    public IReadOnlyList<Announcement> FindByTournamentNameAndDateTimeUtcExceptId(
+        string tournamentName,
+        DateTime dateTimeUtc,
+        long excludedId)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, tournamentName, place, dateTimeUtc, cost, userId, cost_text
+            FROM announcements
+            WHERE tournamentName=@name AND dateTimeUtc=@dateTimeUtc AND id<>@excludedId
+            ORDER BY id
+            """;
+        command.Parameters.AddWithValue("@name", tournamentName);
+        command.Parameters.AddWithValue("@dateTimeUtc", dateTimeUtc.ToUniversalTime().ToString("O"));
+        command.Parameters.AddWithValue("@excludedId", excludedId);
+        using var reader = command.ExecuteReader();
+        var matches = new List<Announcement>();
+        while (reader.Read())
+        {
+            matches.Add(ReadAnnouncement(reader));
+        }
+
+        return matches;
+    }
+
+    public bool ApplyVenueChange(long sourceAnnouncementId, Announcement correctedAnnouncement)
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var source = GetInTransaction(connection, transaction, sourceAnnouncementId);
+        if (source is null)
+        {
+            transaction.Rollback();
+            return false;
+        }
+
+        var changed = source.Id != correctedAnnouncement.Id ||
+                      source.TournamentName != correctedAnnouncement.TournamentName ||
+                      source.Place != correctedAnnouncement.Place ||
+                      source.DateTimeUtc != correctedAnnouncement.DateTimeUtc ||
+                      source.Cost != correctedAnnouncement.Cost ||
+                      source.CostLabel != correctedAnnouncement.CostLabel;
+        if (!changed)
+        {
+            transaction.Commit();
+            return false;
+        }
+
+        if (source.Id != correctedAnnouncement.Id)
+        {
+            using var deleteLinks = connection.CreateCommand();
+            deleteLinks.Transaction = transaction;
+            deleteLinks.CommandText = "DELETE FROM external_posts WHERE announcementId IN (@sourceId, @correctedId)";
+            deleteLinks.Parameters.AddWithValue("@sourceId", source.Id);
+            deleteLinks.Parameters.AddWithValue("@correctedId", correctedAnnouncement.Id);
+            deleteLinks.ExecuteNonQuery();
+
+            using var deleteDuplicate = connection.CreateCommand();
+            deleteDuplicate.Transaction = transaction;
+            deleteDuplicate.CommandText = "DELETE FROM announcements WHERE id=@id";
+            deleteDuplicate.Parameters.AddWithValue("@id", correctedAnnouncement.Id);
+            deleteDuplicate.ExecuteNonQuery();
+        }
+
+        using var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText =
+            """
+            UPDATE announcements
+            SET id=@correctedId, tournamentName=@name, place=@place, dateTimeUtc=@dateTimeUtc,
+                cost=@cost, cost_text=@costText
+            WHERE id=@sourceId
+            """;
+        update.Parameters.AddWithValue("@correctedId", correctedAnnouncement.Id);
+        update.Parameters.AddWithValue("@sourceId", source.Id);
+        update.Parameters.AddWithValue("@name", correctedAnnouncement.TournamentName);
+        update.Parameters.AddWithValue("@place", correctedAnnouncement.Place);
+        update.Parameters.AddWithValue("@dateTimeUtc", correctedAnnouncement.DateTimeUtc.ToUniversalTime().ToString("O"));
+        update.Parameters.AddWithValue("@cost", correctedAnnouncement.Cost);
+        update.Parameters.AddWithValue("@costText", correctedAnnouncement.CostLabel is null ? DBNull.Value : correctedAnnouncement.CostLabel);
+        update.ExecuteNonQuery();
+        transaction.Commit();
+        return true;
+    }
+
+    private static Announcement? GetInTransaction(SqliteConnection connection, SqliteTransaction transaction, long id)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            "SELECT id, tournamentName, place, dateTimeUtc, cost, userId, cost_text FROM announcements WHERE id=@id";
+        command.Parameters.AddWithValue("@id", id);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadAnnouncement(reader) : null;
+    }
+
+    private static Announcement ReadAnnouncement(SqliteDataReader reader)
+    {
+        return new Announcement
+        {
+            Id = reader.GetInt64(0),
+            TournamentName = reader.GetString(1),
+            Place = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+            DateTimeUtc = DateTime.Parse(reader.GetString(3), null, DateTimeStyles.AdjustToUniversal),
+            Cost = reader.GetInt32(4),
+            UserId = reader.IsDBNull(5) ? null : reader.GetInt64(5),
+            CostLabel = reader.IsDBNull(6) ? null : reader.GetString(6)
+        };
+    }
+
     public IReadOnlyList<AnnouncementRow> GetWithLinksInRange(DateTime fromUtc, DateTime? toUtc = null)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
