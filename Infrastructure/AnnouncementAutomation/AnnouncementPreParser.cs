@@ -103,7 +103,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             }
 
             var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var eventLine = FindEventLine(lines);
+            var eventLine = FindEventLine(lines) ??
+                            (DateRegex.IsMatch(title) && TimeRegex.IsMatch(title) ? title : null);
             if (string.IsNullOrWhiteSpace(eventLine))
             {
                 return AnnouncementPreParseResult.Failed("event_not_found", sourceLength);
@@ -327,12 +328,6 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
     {
         var lower = line.ToLowerInvariant();
         var hasTeam = lower.Contains("команд", StringComparison.Ordinal);
-        if (ExcludedTariffMarkers.Any(marker => lower.Contains(marker, StringComparison.Ordinal)))
-        {
-            capacity = null;
-            return false;
-        }
-
         var prefix = lower[..Math.Min(moneyIndex, lower.Length)];
         if (DiscountMarkers.Any(marker => prefix.Contains(marker, StringComparison.Ordinal)))
         {
@@ -341,6 +336,16 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         }
 
         var capacityMatch = TeamCapacityRegex.Match(lower);
+        var tariffDescriptorEnd = capacityMatch.Success
+            ? capacityMatch.Index + capacityMatch.Length
+            : moneyIndex;
+        if (ExcludedTariffMarkers.Any(marker =>
+                lower[..Math.Min(tariffDescriptorEnd, lower.Length)].Contains(marker, StringComparison.Ordinal)))
+        {
+            capacity = null;
+            return false;
+        }
+
         if (capacityMatch.Success &&
             int.TryParse(capacityMatch.Groups["capacity"].Value, out var parsedCapacity))
         {

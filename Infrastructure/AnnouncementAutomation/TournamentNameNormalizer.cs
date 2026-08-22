@@ -30,6 +30,10 @@ internal sealed class TournamentNameNormalizer
         @"(?<prefix>\b(?:том|Masters|Challenger)\s*)\b(?<roman>[IVXLCDM]+)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
+    private static readonly Regex RussianPartSuffixRegex = new(
+        @"\s*:\s*часть\s+(?<part>первая|вторая|третья|четвёртая|четвертая|пятая|шестая|седьмая|восьмая|девятая|десятая)\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
     private static readonly Regex WhitespaceRegex = new(
         @"\s+",
         RegexOptions.CultureInvariant,
@@ -62,6 +66,7 @@ internal sealed class TournamentNameNormalizer
         value = YearRegex.Replace(value, string.Empty);
         value = NumberSignRegex.Replace(value, match => $"-{match.Groups["number"].Value}");
         value = RomanSuffixRegex.Replace(value, ReplaceRomanSuffix);
+        value = RussianPartSuffixRegex.Replace(value, ReplaceRussianPartSuffix);
         value = TrailingNumberRegex.Replace(value, match => $"-{match.Groups["number"].Value}");
         value = WhitespaceRegex.Replace(value, " ");
         return value.Trim().Trim('—', '–', '-', ':', ' ');
@@ -76,6 +81,26 @@ internal sealed class TournamentNameNormalizer
         }
 
         return $"{match.Groups["prefix"].Value.Trim()}-{number}";
+    }
+
+    private static string ReplaceRussianPartSuffix(Match match)
+    {
+        var part = match.Groups["part"].Value.ToLowerInvariant();
+        var number = part switch
+        {
+            "первая" => 1,
+            "вторая" => 2,
+            "третья" => 3,
+            "четвёртая" or "четвертая" => 4,
+            "пятая" => 5,
+            "шестая" => 6,
+            "седьмая" => 7,
+            "восьмая" => 8,
+            "девятая" => 9,
+            "десятая" => 10,
+            _ => 0
+        };
+        return number == 0 ? match.Value : $"-{number}";
     }
 
     private static int TryParseRoman(string value)

@@ -54,6 +54,38 @@ public sealed class AnnouncementPreParserTests
     }
 
     [Fact]
+    public void Parse_AcceptsFullTeamPriceBeforeOtherTariffsOnTheSameLine()
+    {
+        var post = CreatePost(
+            "Стоимость турнира: 1800 руб. с команды до 6ти человек, пары — 800 руб., школьники и соло — 400 руб.");
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.True(result.Success, result.FailureCode);
+        Assert.Equal(1800, result.Cost);
+    }
+
+    [Fact]
+    public void Parse_UsesTitleAsEventLineWhenBodyHasNoDate()
+    {
+        var post = new Post
+        {
+            Id = 3393834,
+            Link = "https://chgk-spb.livejournal.com/3393834.html",
+            Title = "31 июля (пятница) 19:30 - \"Sims To Be: Vol. 22\" в кафе \"Тегеран\"",
+            Description = "Стоимость турнира:<br>2100 руб с команды до 6ти человек<br>1800 руб - студенты и команды до 3х человек"
+        };
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.True(result.Success, result.FailureCode);
+        Assert.Equal(new DateTime(2026, 7, 31, 16, 30, 0, DateTimeKind.Utc),
+            TimeZoneInfo.ConvertTimeToUtc(result.LocalDateTime!.Value, PostFormatter.Moscow));
+        Assert.Equal("Тегеран", result.Place);
+        Assert.Equal(2100, result.Cost);
+    }
+
+    [Fact]
     public void Parse_RejectsDifferentPricesForSameLargestCapacity()
     {
         var post = CreatePost(
