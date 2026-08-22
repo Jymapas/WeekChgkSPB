@@ -578,10 +578,11 @@ internal class ModerationHandler
 
     private static string FormatAnnouncementForAdmin(Announcement announcement, string userInfo)
     {
+        var moscowDt = TimeZoneInfo.ConvertTimeFromUtc(announcement.DateTimeUtc, PostFormatter.Moscow);
         return $"Пользователь: {userInfo}\n" +
                $"Название: {announcement.TournamentName}\n" +
                $"Место: {announcement.Place}\n" +
-               $"Дата и время: {announcement.DateTimeUtc:yyyy-MM-dd HH:mm} UTC\n" +
+               $"Дата и время: {moscowDt:yyyy-MM-dd HH:mm} МСК\n" +
                $"Стоимость: {PostFormatter.FormatCost(announcement.Cost, announcement.CostLabel)}";
     }
 }

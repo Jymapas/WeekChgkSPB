@@ -149,6 +149,38 @@ public class ModerationHandlerTests : IClassFixture<SqliteFixture>
         updater.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task SendAllowedUserNotification_FormatsAnnouncementDateInMoscowTime()
+    {
+        _fixture.Reset();
+        var sentMessages = new List<string>();
+        var botMock = CreateBotMock(sentMessages, new List<string>());
+        var handler = new ModerationHandler(
+            botMock.Object,
+            _fixture.CreateAnnouncementsRepository(),
+            _fixture.CreateUserManagementRepository(),
+            _fixture.CreatePostsRepository(),
+            new Mock<IChannelPostUpdater>().Object,
+            _fixture.CreateFootersRepository(),
+            adminChatId: 1,
+            new BotConversationState());
+
+        await handler.SendAllowedUserNotification(
+            new Announcement
+            {
+                Id = 1,
+                TournamentName = "Ночной турнир",
+                Place = "Лофт",
+                DateTimeUtc = new DateTime(2025, 9, 1, 16, 30, 0, DateTimeKind.Utc),
+                Cost = 450
+            },
+            "user",
+            CancellationToken.None);
+
+        Assert.Contains(sentMessages, text => text.Contains("Дата и время: 2025-09-01 19:30 МСК"));
+        Assert.DoesNotContain(sentMessages, text => text.Contains("16:30 UTC"));
+    }
+
     [Theory]
     [InlineData("approve", "Пост одобрен", false)]
     [InlineData("allow", "Пользователь может постить без модерации", true)]
