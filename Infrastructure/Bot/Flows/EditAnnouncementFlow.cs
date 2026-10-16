@@ -89,7 +89,7 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
             return true;
         }
 
-        context.Announcements.Update(state.Existing);
+        context.Announcements.Update(state.Existing, context.Message.From?.Id);
         await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
         await context.Bot.SendMessage(context.Message.Chat.Id, response, cancellationToken: context.CancellationToken);
 

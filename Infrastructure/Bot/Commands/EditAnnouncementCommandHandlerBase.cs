@@ -86,7 +86,7 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
                 return;
             }
 
-            context.Announcements.Update(existing);
+            context.Announcements.Update(existing, msg.From?.Id);
             await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
             await context.Bot.SendMessage(msg.Chat.Id, message, cancellationToken: context.CancellationToken);
 

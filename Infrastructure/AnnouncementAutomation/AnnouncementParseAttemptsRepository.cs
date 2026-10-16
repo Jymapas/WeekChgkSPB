@@ -59,7 +59,7 @@ internal sealed class AnnouncementParseAttemptsRepository
         command.CommandText =
             """
             UPDATE announcement_parse_attempts
-            SET outcome=@outcome, failure_code=@failureCode
+            SET outcome=@outcome, failure_code=COALESCE(@failureCode, failure_code)
             WHERE post_id=@postId
             """;
         command.Parameters.AddWithValue("@outcome", outcome);

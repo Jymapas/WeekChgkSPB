@@ -54,6 +54,17 @@ internal sealed class TournamentNameNormalizer
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
             RegexTimeout);
 
+        value = Regex.Replace(value, @"\s*\(\s*Финал ЛВ\s*\)", string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value, @"^Sims To Be\s*:\s*Vol\.\s*(\d+)\s*$", "Sims To Be-$1",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value,
+            @"^(?<stage>Первый|Второй|Третий|Четв[её]ртый) этап отбора на Чемпионат России среди студентов по интеллектуальным играм$",
+            match => "Отбор на СтудЧР-" + (match.Groups["stage"].Value.ToLowerInvariant() switch
+            {
+                "первый" => "1", "второй" => "2", "третий" => "3", _ => "4"
+            }), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
         var b52 = B52Regex.Match(value);
         if (b52.Success)
         {

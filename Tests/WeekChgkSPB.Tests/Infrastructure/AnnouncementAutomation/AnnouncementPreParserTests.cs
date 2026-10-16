@@ -200,6 +200,20 @@ public sealed class AnnouncementPreParserTests
         Assert.NotNull(result.LocalDateTime);
     }
 
+    [Theory]
+    [InlineData("09:30", "9-30", null)]
+    [InlineData("19:00", "19-30", "datetime_conflict")]
+    public void Parse_ComparesExplicitStartTimes(string titleTime, string gameTime, string? expectedFailure)
+    {
+        var post = new Post
+        {
+            Title = $"12 июля {titleTime} турнир «Кубок» в клубе «Rossi's»",
+            Description = $"Начало регистрации в 9:00, начало турнира {gameTime}<br>Взнос — 1800 рублей"
+        };
+        var result = _parser.Parse(post, Now);
+        Assert.Equal(expectedFailure, result.FailureCode);
+    }
+
     private static Post CreatePost(string costBlock) => new()
     {
         Id = 42,

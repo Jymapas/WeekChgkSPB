@@ -17,6 +17,25 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"weekchgk-{Guid.NewGuid():N}.db");
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConflictingTime_RequiresManualDateBeforeSaving(bool active)
+    {
+        var context = CreateContext(active ? AnnouncementAutomationMode.Active : AnnouncementAutomationMode.Shadow);
+        var post = CreatePost(900, "Команда — 1800 ₽");
+        post.Description += "<br>Начало регистрации 19:00, начало турнира 20:00";
+        context.Posts.Insert(post);
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+        var draft = context.Drafts.Get(post.Id);
+        Assert.NotNull(draft);
+        Assert.Equal("datetime_conflict", draft!.FailureCode);
+        Assert.Null(draft.DateTimeUtc);
+        Assert.False(draft.IsComplete);
+        Assert.Null(context.Announcements.Get(post.Id));
+        context.Channel.Verify(update => update.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task Active_SavesLocallyParsedPriceAndUpdatesChannel()
     {
@@ -65,7 +84,7 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
     }
 
     [Fact]
-    public async Task AmbiguousCost_FallsBackWithoutCallingApi()
+    public async Task AmbiguousCost_CreatesReviewWithoutCallingApi()
     {
         var context = CreateContext(AnnouncementAutomationMode.Active);
         var post = CreatePost(102, "Команда — 1800 ₽<br>Команда до 6 человек — 2000 ₽");
@@ -75,6 +94,12 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
 
         Assert.Null(context.Announcements.Get(post.Id));
         Assert.Equal(0, context.Extraction.CallCount);
+        var draft = context.Drafts.Get(post.Id);
+        Assert.NotNull(draft);
+        Assert.Null(draft!.Cost);
+        Assert.Equal("cost_ambiguous", draft.FailureCode);
+        Assert.NotNull(draft.ReviewMessageId);
+        Assert.False(draft.IsComplete);
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(post, It.IsAny<CancellationToken>()), Times.Once);
     }
 

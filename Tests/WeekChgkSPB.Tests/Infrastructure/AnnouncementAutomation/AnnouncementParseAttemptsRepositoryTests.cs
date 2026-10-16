@@ -46,6 +46,21 @@ public sealed class AnnouncementParseAttemptsRepositoryTests : IDisposable
         Assert.False(repository.Exists(13));
     }
 
+    [Fact]
+    public void Approval_PreservesOriginalFailureCode()
+    {
+        var repository = new AnnouncementParseAttemptsRepository(_dbPath);
+        repository.Upsert(new AnnouncementParseAttempt(
+            42, "shadow", "review_pending", "datetime_mismatch", 1800, "1800 ₽",
+            900, 120, "alibaba_model_studio", AnnouncementAutomationOptions.DefaultModel, null, null, null));
+        repository.SetOutcome(42, "review_added");
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT failure_code FROM announcement_parse_attempts WHERE post_id=42";
+        Assert.Equal("datetime_mismatch", command.ExecuteScalar());
+    }
+
     public void Dispose()
     {
         if (File.Exists(_dbPath)) File.Delete(_dbPath);

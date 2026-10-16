@@ -35,7 +35,11 @@ internal sealed class AnnouncementCandidateValidator(
             return AnnouncementValidationResult.Failed("datetime_mismatch");
         }
 
-        if (RegistrationMarkers.Any(marker =>
+        var evidencedGameTime = AnnouncementPreParser.FindGameTime(candidate.Evidence.LocalDateTime);
+        var containsMatchingGameTime = evidencedGameTime.Success &&
+            int.Parse(evidencedGameTime.Groups["hour"].Value, CultureInfo.InvariantCulture) == candidateLocal.Hour &&
+            int.Parse(evidencedGameTime.Groups["minute"].Value, CultureInfo.InvariantCulture) == candidateLocal.Minute;
+        if (!containsMatchingGameTime && RegistrationMarkers.Any(marker =>
                 candidate.Evidence.LocalDateTime.Contains(marker, StringComparison.OrdinalIgnoreCase)))
         {
             return AnnouncementValidationResult.Failed("non_game_time");
@@ -57,7 +61,7 @@ internal sealed class AnnouncementCandidateValidator(
 
         var normalized = nameNormalizer.Normalize(candidate.RawTournamentName);
         if (string.IsNullOrWhiteSpace(normalized) ||
-            !string.Equals(normalized, candidate.TournamentName.Trim(), StringComparison.Ordinal))
+            !string.Equals(normalized, nameNormalizer.Normalize(candidate.TournamentName), StringComparison.Ordinal))
         {
             return AnnouncementValidationResult.Failed("name_normalization_mismatch");
         }

@@ -77,6 +77,18 @@ public class AnnouncementsRepository
         EnsureColumnExists(connection, "external_posts", "normalizedLink", "TEXT");
         EnsureColumnExists(connection, "announcements", "cost_text", "TEXT");
         EnsureColumnExists(connection, "pending_announcements", "cost_text", "TEXT");
+        cmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS announcement_edits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                announcement_id INTEGER NOT NULL,
+                field TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                edited_by_user_id INTEGER NOT NULL,
+                edited_at_utc TEXT NOT NULL
+            )
+            """;
+        cmd.ExecuteNonQuery();
         BackfillExternalNormalizedLinks(connection);
     }
 
@@ -273,11 +285,38 @@ public class AnnouncementsRepository
         };
     }
 
-    public void Update(Announcement a)
+    public void Update(Announcement a, long? editedByUserId = null)
     {
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
+        using var transaction = connection.BeginTransaction();
+        if (editedByUserId.HasValue)
+        {
+            foreach (var (field, value) in new (string Field, object? Value)[]
+                     {
+                         ("tournamentName", a.TournamentName), ("place", a.Place),
+                         ("dateTimeUtc", a.DateTimeUtc.ToUniversalTime().ToString("O")),
+                         ("cost", a.Cost), ("cost_text", a.CostLabel)
+                     })
+            {
+                using var audit = connection.CreateCommand();
+                audit.Transaction = transaction;
+                audit.CommandText = $"""
+                    INSERT INTO announcement_edits
+                        (announcement_id, field, old_value, new_value, edited_by_user_id, edited_at_utc)
+                    SELECT id, @field, CAST({field} AS TEXT), CAST(@value AS TEXT), @userId, @now
+                    FROM announcements WHERE id=@id AND {field} IS NOT @value
+                    """;
+                audit.Parameters.AddWithValue("@field", field);
+                audit.Parameters.AddWithValue("@value", value ?? DBNull.Value);
+                audit.Parameters.AddWithValue("@userId", editedByUserId.Value);
+                audit.Parameters.AddWithValue("@id", a.Id);
+                audit.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+                audit.ExecuteNonQuery();
+            }
+        }
         using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
         cmd.CommandText =
             @"UPDATE announcements
               SET tournamentName=@name,
@@ -293,6 +332,7 @@ public class AnnouncementsRepository
         cmd.Parameters.AddWithValue("@cost", a.Cost);
         cmd.Parameters.AddWithValue("@costText", a.CostLabel is null ? DBNull.Value : a.CostLabel);
         cmd.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     public IReadOnlyList<Announcement> FindByTournamentNameAndDateTimeUtcExceptId(

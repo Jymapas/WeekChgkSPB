@@ -67,6 +67,14 @@ internal sealed class AnnouncementAutomationProcessor(
 
         if (!preParse.CanCallApi)
         {
+            if (preParse.FailureCode == "cost_ambiguous")
+            {
+                await CreateReviewAsync(post, preParse,
+                    AnnouncementExtractionResult.Failed("cost_ambiguous"),
+                    preParse.FailureCode, null, null, cancellationToken);
+                return;
+            }
+
             SaveAttempt(post.Id, preParse, null, "fallback", preParse.FailureCode, null);
             await notifier.NotifyNewPostAsync(post, cancellationToken);
             attempts.MarkNotified(post.Id);
@@ -280,7 +288,8 @@ internal sealed class AnnouncementAutomationProcessor(
             Place = validatedAnnouncement?.Place ??
                     NullIfWhiteSpace(preParse.Place) ??
                     NullIfWhiteSpace(candidate?.Place),
-            DateTimeUtc = validatedAnnouncement?.DateTimeUtc ??
+            DateTimeUtc = preParse.FailureCode == "datetime_conflict" ? null :
+                          validatedAnnouncement?.DateTimeUtc ??
                           ResolveDateTimeUtc(preParse.LocalDateTime, candidate?.LocalDateTime),
             Cost = preParse.Cost,
             FailureCode = failureCode,
