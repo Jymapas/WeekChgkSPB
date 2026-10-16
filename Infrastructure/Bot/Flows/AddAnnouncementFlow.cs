@@ -163,6 +163,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
 
             var pendingId = context.UserManagement.AddPending(pending);
             pending.Id = pendingId;
+            state.SubmittedPendingId = pendingId;
 
             await context.Moderation.SendModerationRequest(pending, userId.Value, userName, context.CancellationToken);
             await context.Bot.SendMessage(context.Message.Chat.Id, Messages.AnnouncementSentForModeration, cancellationToken: context.CancellationToken);
@@ -266,6 +267,7 @@ internal class AddAnnouncementFlow : IConversationFlowHandler
 
             var pendingId = context.UserManagement.AddPending(pending);
             pending.Id = pendingId;
+            state.SubmittedPendingId = pendingId;
 
             var userName = context.Message.From?.Username is not null
                 ? $"@{context.Message.From.Username}"

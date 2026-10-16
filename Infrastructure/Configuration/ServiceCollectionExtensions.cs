@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
+using WeekChgkSPB.Infrastructure.Bot.Auditing;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Bot.Flows;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -17,6 +18,17 @@ internal static class ServiceCollectionExtensions
         AppSettings settings,
         string rssUrl)
     {
+        services.AddSingleton(new ManualActionsRepository(settings.DbPath));
+        services.AddSingleton(sp => new BotManualActionAuditor(
+            sp.GetRequiredService<ManualActionsRepository>(),
+            sp.GetRequiredService<BotConversationState>(),
+            sp.GetRequiredService<AnnouncementsRepository>(),
+            sp.GetRequiredService<PostsRepository>(),
+            sp.GetRequiredService<FootersRepository>(),
+            sp.GetRequiredService<UserManagementRepository>(),
+            sp.GetRequiredService<AnnouncementReviewDraftRepository>(),
+            sp.GetRequiredService<BotCommandHelper>(),
+            settings.ChatId));
         services.AddSingleton(new PostsRepository(settings.DbPath));
         services.AddSingleton(new FootersRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementsRepository(settings.DbPath));
@@ -125,7 +137,8 @@ internal static class ServiceCollectionExtensions
             sp.GetServices<IBotCommandHandler>(),
             sp.GetServices<IConversationFlowHandler>(),
             sp.GetRequiredService<AnnouncementReviewHandler>(),
-            sp.GetRequiredService<ForcePostHandler>()));
+            sp.GetRequiredService<ForcePostHandler>(),
+            sp.GetRequiredService<BotManualActionAuditor>()));
 
         if (settings.HasScheduler)
         {

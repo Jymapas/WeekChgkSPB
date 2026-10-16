@@ -6,12 +6,14 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using WeekChgkSPB.Infrastructure.Notifications;
+using WeekChgkSPB.Infrastructure.Bot.Auditing;
 using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 namespace WeekChgkSPB.Infrastructure.Bot;
 
 internal class BotRunner
 {
+    private readonly BotManualActionAuditor? _manualActionAuditor;
     private readonly long _allowedChatId;
     private readonly ITelegramBotClient _bot;
     private readonly PostsRepository _posts;
@@ -39,8 +41,10 @@ internal class BotRunner
         IEnumerable<IBotCommandHandler> handlers,
         IEnumerable<IConversationFlowHandler> flows,
         AnnouncementReviewHandler? announcementReviewHandler = null,
-        ForcePostHandler? forcePostHandler = null)
+        ForcePostHandler? forcePostHandler = null,
+        BotManualActionAuditor? manualActionAuditor = null)
     {
+        _manualActionAuditor = manualActionAuditor;
         _bot = bot;
         _allowedChatId = allowedChatId;
         _posts = posts;
@@ -70,9 +74,39 @@ internal class BotRunner
 
     internal async Task HandleUpdate(ITelegramBotClient bot, Update update, CancellationToken ct)
     {
+        var action = _manualActionAuditor?.Begin(update);
+        Exception? failure = null;
+        try
+        {
+            await HandleUpdateCoreAsync(bot, update, action, ct);
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+            throw;
+        }
+        finally
+        {
+            if (action is not null)
+            {
+                try
+                {
+                    _manualActionAuditor!.Complete(action, failure);
+                }
+                catch when (failure is not null)
+                {
+                    // Сохраняем исходное исключение; незавершённая запись остаётся в журнале.
+                }
+            }
+        }
+    }
+
+    /// <summary>Передаёт обновление существующим обработчикам команд, ввода и кнопок.</summary>
+    private async Task HandleUpdateCoreAsync(ITelegramBotClient bot, Update update, ManualAction? action, CancellationToken ct)
+    {
         if (update.CallbackQuery is not null)
         {
-            await HandleCallbackQuery(bot, update.CallbackQuery, ct);
+            await HandleCallbackQuery(bot, update.CallbackQuery, action, ct);
             return;
         }
 
@@ -98,15 +132,15 @@ internal class BotRunner
         var isAdminChat = message.Chat.Id == _allowedChatId;
         var context = new BotCommandContext(_bot, message, ct, _announcements, _posts, _footers, _stateStore, _helper, isAdminChat, _userManagement, _moderationHandler);
 
-        if (await HandleCommandAsync(context))
+        if (await HandleCommandAsync(context, action))
         {
             return;
         }
 
-        await HandleFlowAsync(context);
+        await HandleFlowAsync(context, action);
     }
 
-    private async Task HandleCallbackQuery(ITelegramBotClient bot, Telegram.Bot.Types.CallbackQuery callbackQuery, CancellationToken ct)
+    private async Task HandleCallbackQuery(ITelegramBotClient bot, Telegram.Bot.Types.CallbackQuery callbackQuery, ManualAction? action, CancellationToken ct)
     {
         if (callbackQuery.Message is null || callbackQuery.Data is null)
         {
@@ -119,27 +153,34 @@ internal class BotRunner
             return;
         }
 
+        if (action is not null) action.Handler = nameof(ModerationHandler);
         if (await _moderationHandler.HandleCallbackQuery(callbackQuery, ct))
         {
+            if (action is not null) action.Outcome = "handled";
             return;
         }
 
+        if (action is not null) action.Handler = nameof(AnnouncementReviewHandler);
         if (_announcementReviewHandler is not null &&
             await _announcementReviewHandler.HandleCallbackQuery(callbackQuery, ct))
         {
+            if (action is not null) action.Outcome = "handled";
             return;
         }
 
+        if (action is not null) action.Handler = nameof(ForcePostHandler);
         if (_forcePostHandler is not null &&
             await _forcePostHandler.HandleCallbackQuery(callbackQuery, ct))
         {
+            if (action is not null) action.Outcome = "handled";
             return;
         }
 
+        if (action is not null) action.Handler = null;
         await bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
     }
 
-    private async Task<bool> HandleCommandAsync(BotCommandContext context)
+    private async Task<bool> HandleCommandAsync(BotCommandContext context, ManualAction? action)
     {
         var text = context.Message.Text;
         if (text is null || !text.StartsWith('/'))
@@ -154,14 +195,16 @@ internal class BotRunner
                 continue;
             }
 
+            if (action is not null) action.Handler = handler.GetType().Name;
             await handler.HandleAsync(context);
+            if (action is not null) action.Outcome = "handled";
             return true;
         }
 
         return false;
     }
 
-    private async Task HandleFlowAsync(BotCommandContext context)
+    private async Task HandleFlowAsync(BotCommandContext context, ManualAction? action)
     {
         var from = context.Message.From;
         if (from is null)
@@ -181,8 +224,10 @@ internal class BotRunner
 
         foreach (var flow in flowsForStep)
         {
+            if (action is not null) action.Handler = flow.GetType().Name;
             if (await flow.HandleAsync(context, state))
             {
+                if (action is not null) action.Outcome = "handled";
                 return;
             }
         }
