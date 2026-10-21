@@ -5,6 +5,12 @@ namespace WeekChgkSPB.Tests.Infrastructure;
 public class LinkNormalizerTests
 {
     [Fact]
+    public void Normalize_LiveJournalViewQuery_IdentifiesSamePost()
+    {
+        Assert.Equal("https://chgk-spb.livejournal.com/123.html",
+            LinkNormalizer.Normalize("http://chgk-spb.livejournal.com/123.html?view=comments#comments"));
+    }
+    [Fact]
     public void Normalize_LiveJournalId_ReturnsCanonicalUrl()
     {
         var normalized = LinkNormalizer.Normalize("123");

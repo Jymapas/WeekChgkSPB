@@ -1,28 +1,16 @@
-using System;
-using System.Threading.Tasks;
 using Telegram.Bot;
 using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Commands;
 
-internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
+internal sealed class DeleteAnnouncementCommandHandler(IChannelPostUpdater channelPostUpdater) : IBotCommandHandler
 {
-    private readonly IChannelPostUpdater _channelPostUpdater;
-
-    public DeleteAnnouncementCommandHandler(IChannelPostUpdater channelPostUpdater)
-    {
-        _channelPostUpdater = channelPostUpdater;
-    }
-
-    public bool CanHandle(BotCommandContext context)
-    {
-        return context.Helper.IsCommand(context.Message.Text, BotCommands.Delete);
-    }
+    public bool CanHandle(BotCommandContext context) => context.Helper.IsCommand(context.Message.Text, BotCommands.Delete);
 
     public async Task HandleAsync(BotCommandContext context)
     {
         var msg = context.Message;
-        var parts = msg.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var parts = msg.Text!.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length < 2)
         {
             await context.Bot.SendMessage(msg.Chat.Id, Messages.Delete.Usage, cancellationToken: context.CancellationToken);
@@ -37,30 +25,23 @@ internal class DeleteAnnouncementCommandHandler : IBotCommandHandler
             return;
         }
 
-        var userId = msg.From?.Id;
-        var isAdmin = context.IsAdminChat;
-        var canDelete = isAdmin || (userId.HasValue && existing.UserId == userId);
-
-        if (!canDelete)
+        var result = context.Announcements.DeleteAuthorized(existing.Id, context.Actor);
+        if (msg.From is not null) context.StateStore.Remove(msg.From.Id);
+        if (result.Status == AnnouncementMutationStatus.Denied)
         {
+            context.AccessDenied = true;
             await context.Bot.SendMessage(msg.Chat.Id, Messages.Delete.CannotDeleteOthers, cancellationToken: context.CancellationToken);
             return;
         }
-
-        var deleted = context.Announcements.Delete(existing.Id);
-        if (msg.From is not null)
+        if (result.Status == AnnouncementMutationStatus.NotFound)
         {
-            context.StateStore.Remove(msg.From.Id);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.AnnouncementNotFound, cancellationToken: context.CancellationToken);
+            return;
         }
 
-        if (deleted)
-        {
-            await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
-        }
-
-        await context.Bot.SendMessage(
-            msg.Chat.Id,
-            Messages.Delete.Deleted(existing.TournamentName, link),
-            cancellationToken: context.CancellationToken);
+        if (result.Status == AnnouncementMutationStatus.Changed)
+            await channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
+        await context.Bot.SendMessage(msg.Chat.Id,
+            Messages.Delete.Deleted(result.Announcement!.TournamentName, link), cancellationToken: context.CancellationToken);
     }
 }

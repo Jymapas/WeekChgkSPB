@@ -23,6 +23,9 @@ public static class BotCommands
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
     public const string FooterEdit = "/footer_edit";
+    public const string LjBind = "/lj_bind";
+    public const string LjUnbind = "/lj_unbind";
+    public const string LjList = "/lj_list";
 
     public static readonly string[] AdminOnly =
     [
@@ -33,6 +36,9 @@ public static class BotCommands
         FooterList,
         FooterDel,
         FooterEdit,
+        LjBind,
+        LjUnbind,
+        LjList,
     ];
 
     public static readonly string[] User =
@@ -74,6 +80,9 @@ public static class BotCommands
         [FooterList] = "Список футеров",
         [FooterDel] = "Удалить футер",
         [FooterEdit] = "Редактировать футер",
+        [LjBind] = "Связать Telegram-пользователя с автором ЖЖ",
+        [LjUnbind] = "Удалить связь с автором ЖЖ",
+        [LjList] = "Показать связи с авторами ЖЖ",
     };
 
     public static IReadOnlyList<BotCommand> AsAdminBotCommands() => ToBotCommands(All);

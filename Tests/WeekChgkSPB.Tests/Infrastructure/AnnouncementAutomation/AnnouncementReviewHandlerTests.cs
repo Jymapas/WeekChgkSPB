@@ -24,6 +24,31 @@ public sealed class AnnouncementReviewHandlerTests : IDisposable
         Path.Combine(Path.GetTempPath(), $"weekchgk-review-handler-{Guid.NewGuid():N}.db");
 
     [Fact]
+    public async Task OldReviewCallback_DoesNotRecreateManuallyDeletedAnnouncement()
+    {
+        var context = CreateContext();
+        var post = CreatePost(42);
+        context.Posts.Insert(post);
+        context.Drafts.Upsert(new AnnouncementReviewDraft
+        {
+            PostId = 42, TournamentName = "Game", Place = "Venue", Cost = 100,
+            DateTimeUtc = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc)
+        });
+        context.Announcements.Insert(new Announcement
+        {
+            Id = 42, TournamentName = "Game", Place = "Venue", Cost = 100,
+            DateTimeUtc = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc)
+        });
+        context.Announcements.DeleteAuthorized(42, new AnnouncementActor(1, true, true));
+
+        Assert.True(await context.Handler.HandleCallbackQuery(CreateCallback("autoreview_add_42"), CancellationToken.None));
+
+        Assert.Null(context.Announcements.Get(42));
+        Assert.Equal(AnnouncementReviewStatuses.Pending, context.Drafts.Get(42)!.Status);
+        context.Channel.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task EnsureNotification_HidesAddButtonUntilDraftIsComplete()
     {
         var context = CreateContext();

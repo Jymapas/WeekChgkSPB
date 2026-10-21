@@ -153,6 +153,12 @@ internal class BotRunner
             return;
         }
 
+        if (_userManagement.IsBanned(callbackQuery.From.Id))
+        {
+            await bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Bot.AccessDenied, cancellationToken: ct);
+            return;
+        }
+
         if (action is not null) action.Handler = nameof(ModerationHandler);
         if (await _moderationHandler.HandleCallbackQuery(callbackQuery, ct))
         {
@@ -196,8 +202,18 @@ internal class BotRunner
             }
 
             if (action is not null) action.Handler = handler.GetType().Name;
-            await handler.HandleAsync(context);
-            if (action is not null) action.Outcome = "handled";
+            try
+            {
+                await handler.HandleAsync(context);
+            }
+            finally
+            {
+                if (action is not null) action.Denied |= context.AccessDenied;
+            }
+            if (action is not null)
+            {
+                action.Outcome = context.AccessDenied ? "denied" : "handled";
+            }
             return true;
         }
 
@@ -225,9 +241,21 @@ internal class BotRunner
         foreach (var flow in flowsForStep)
         {
             if (action is not null) action.Handler = flow.GetType().Name;
-            if (await flow.HandleAsync(context, state))
+            bool handled;
+            try
             {
-                if (action is not null) action.Outcome = "handled";
+                handled = await flow.HandleAsync(context, state);
+            }
+            finally
+            {
+                if (action is not null) action.Denied |= context.AccessDenied;
+            }
+            if (handled)
+            {
+                if (action is not null)
+                {
+                    action.Outcome = context.AccessDenied ? "denied" : "handled";
+                }
                 return;
             }
         }

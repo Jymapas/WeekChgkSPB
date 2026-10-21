@@ -21,6 +21,7 @@ internal sealed class AnnouncementAutomationProcessor(
 
     public bool ShouldProcessPost(long postId, bool isNewPost, bool isVenueChange = false)
     {
+        if (announcements.IsAutomationSuppressed(postId)) return false;
         if (options.Mode == AnnouncementAutomationMode.Off)
         {
             return isNewPost;
@@ -44,6 +45,7 @@ internal sealed class AnnouncementAutomationProcessor(
 
     public async Task ProcessAsync(Post post, DateTime nowUtc, CancellationToken cancellationToken)
     {
+        if (announcements.IsAutomationSuppressed(post.Id, post.Link)) return;
         if (options.Mode == AnnouncementAutomationMode.Off)
         {
             await notifier.NotifyNewPostAsync(post, cancellationToken);
@@ -149,7 +151,13 @@ internal sealed class AnnouncementAutomationProcessor(
         }
 
         SaveAttempt(post.Id, preParse, extraction, "accepted", null, extraction.Candidate);
-        announcements.Insert(validation.Announcement);
+        if (!announcements.TryInsertAutomatically(validation.Announcement, post.Link))
+        {
+            var deleted = announcements.IsAutomationSuppressed(post.Id, post.Link);
+            SaveAttempt(post.Id, preParse, extraction, deleted ? "suppressed" : "duplicate",
+                deleted ? "announcement_deleted" : "announcement_exists", extraction.Candidate);
+            return;
+        }
         attempts.MarkSaved(post.Id);
         await channelPostUpdater.UpdateLastPostAsync(cancellationToken);
         attempts.MarkChannelUpdated(post.Id);

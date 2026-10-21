@@ -10,16 +10,16 @@ internal sealed class ManualAction
     internal string? CallbackQueryId { get; init; }
     internal string Kind { get; init; } = "input";
     internal string Name { get; init; } = "input";
-    internal string? Input { get; init; }
+    internal string? Input { get; set; }
     internal string? Handler { get; set; }
     internal string Outcome { get; set; } = "ignored";
     internal string? EntityType { get; set; }
     internal long? EntityId { get; set; }
     internal string? SourceLink { get; set; }
-    internal string StepBefore { get; init; } = "None";
+    internal string StepBefore { get; set; } = "None";
     internal string StepAfter { get; set; } = "None";
     internal string? BeforeJson { get; set; }
     internal string? AfterJson { get; set; }
-    internal AddAnnouncementState? State { get; init; }
-    internal bool Denied { get; init; }
+    internal AddAnnouncementState? State { get; set; }
+    internal bool Denied { get; set; }
 }

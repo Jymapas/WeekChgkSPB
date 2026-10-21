@@ -47,6 +47,7 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var state = stateStore.AddOrUpdate(userId);
         state.Step = AddStep.EditWaitingName;
         state.Existing = repo.Get(5);
+        state.EditChatId = chatId;
 
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
@@ -102,6 +103,7 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var state = stateStore.AddOrUpdate(userId);
         state.Step = AddStep.EditWaitingDateTime;
         state.Existing = repo.Get(8);
+        state.EditChatId = chatId;
 
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(
@@ -154,6 +156,7 @@ public class EditAnnouncementFlowTests : IClassFixture<SqliteFixture>
         var state = stateStore.AddOrUpdate(userId);
         state.Step = AddStep.EditWaitingCost;
         state.Existing = repo.Get(9);
+        state.EditChatId = chatId;
 
         var botClient = TelegramBotClientStub.Create();
         var context = FlowTestContextFactory.CreateContext(

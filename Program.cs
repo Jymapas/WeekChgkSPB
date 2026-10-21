@@ -37,6 +37,7 @@ internal class Program
         var repo = services.GetRequiredService<PostsRepository>();
         var announcementsRepo = services.GetRequiredService<AnnouncementsRepository>();
         var fetcher = services.GetRequiredService<RssFetcher>();
+        var identities = services.GetRequiredService<LiveJournalIdentityRepository>();
         var automationProcessor = services.GetRequiredService<AnnouncementAutomationProcessor>();
         var botRunner = services.GetRequiredService<BotRunner>();
         var botClient = services.GetRequiredService<ITelegramBotClient>();
@@ -88,7 +89,7 @@ internal class Program
         botRunner.Start(cts.Token);
 
         await automationProcessor.ReconcileVenueChangesAsync(DateTime.UtcNow, cts.Token);
-        await CheckOnceAsync(fetcher, repo, announcementsRepo, automationProcessor, cts.Token);
+        await CheckOnceAsync(fetcher, repo, announcementsRepo, identities, automationProcessor, cts.Token);
         var lastRssCheck = DateTime.UtcNow;
 
         if (scheduler is not null)
@@ -103,7 +104,7 @@ internal class Program
             {
                 if (DateTime.UtcNow - lastRssCheck >= TimeSpan.FromHours(1))
                 {
-                    await CheckOnceAsync(fetcher, repo, announcementsRepo, automationProcessor, cts.Token);
+                    await CheckOnceAsync(fetcher, repo, announcementsRepo, identities, automationProcessor, cts.Token);
                     lastRssCheck = DateTime.UtcNow;
                 }
 
@@ -121,7 +122,8 @@ internal class Program
         await host.StopAsync();
     }
 
-    private static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, AnnouncementsRepository announcementsRepo, AnnouncementAutomationProcessor automationProcessor,
+    internal static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, AnnouncementsRepository announcementsRepo,
+        LiveJournalIdentityRepository identities, AnnouncementAutomationProcessor automationProcessor,
         CancellationToken ct)
     {
         try
@@ -134,6 +136,7 @@ internal class Program
 
             foreach (var post in feedPosts.Where(p => p.Id != 0))
             {
+                identities.SaveAuthor(post);
                 var isNewPost = !repo.Exists(post.Id);
                 var isVenueChange = AnnouncementPreParser.IsVenueChange(post);
                 var hasAnnouncement = announcementsRepo.Exists(post.Id);

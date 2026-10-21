@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.Data.Sqlite;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -133,19 +132,21 @@ internal sealed class AnnouncementReviewHandler(
                              announcements.GetByLink(post.Link) is not null);
         if (!alreadyExists)
         {
-            try
+            if (!announcements.TryInsertAutomatically(new Announcement
             {
-                announcements.Insert(new Announcement
+                Id = postId,
+                TournamentName = draft.TournamentName!,
+                Place = draft.Place!,
+                DateTimeUtc = draft.DateTimeUtc!.Value,
+                Cost = draft.Cost!.Value
+            }, post.Link))
+            {
+                if (announcements.IsAutomationSuppressed(postId, post.Link))
                 {
-                    Id = postId,
-                    TournamentName = draft.TournamentName!,
-                    Place = draft.Place!,
-                    DateTimeUtc = draft.DateTimeUtc!.Value,
-                    Cost = draft.Cost!.Value
-                });
-            }
-            catch (SqliteException) when (announcements.Exists(postId))
-            {
+                    await bot.AnswerCallbackQuery(callbackQuery.Id,
+                        "Анонс удалён вручную. Восстановить его можно командой /add.", cancellationToken: cancellationToken);
+                    return;
+                }
                 alreadyExists = true;
             }
         }

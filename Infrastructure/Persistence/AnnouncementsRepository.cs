@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace WeekChgkSPB;
 
-public class AnnouncementsRepository
+public partial class AnnouncementsRepository
 {
     private readonly string _dbPath;
 
@@ -90,6 +90,7 @@ public class AnnouncementsRepository
             """;
         cmd.ExecuteNonQuery();
         BackfillExternalNormalizedLinks(connection);
+        AnnouncementOwnershipSchema.EnsureCreated(connection);
     }
 
     private static void EnsureColumnExists(SqliteConnection connection, string table, string column, string type)
@@ -116,14 +117,16 @@ public class AnnouncementsRepository
     {
         var rows = new List<(long Id, string Normalized)>();
         using var select = connection.CreateCommand();
-        select.CommandText = @"SELECT announcementId, link FROM external_posts WHERE normalizedLink IS NULL OR normalizedLink = ''";
+        select.CommandText = @"SELECT announcementId, link, normalizedLink FROM external_posts";
         using (var reader = select.ExecuteReader())
         {
             while (reader.Read())
             {
                 var id = reader.GetInt64(0);
                 var link = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                rows.Add((id, LinkNormalizer.Normalize(link)));
+                var normalized = LinkNormalizer.Normalize(link);
+                if (reader.IsDBNull(2) || reader.GetString(2) != normalized)
+                    rows.Add((id, normalized));
             }
         }
 
@@ -257,8 +260,7 @@ public class AnnouncementsRepository
               FROM announcements AS a
               LEFT JOIN posts AS p ON p.id = a.id
               LEFT JOIN external_posts AS e ON e.announcementId = a.id
-              WHERE p.normalizedLink = @normalized
-                 OR p.link = @raw
+              WHERE (e.announcementId IS NULL AND (p.normalizedLink = @normalized OR p.link = @raw))
                  OR e.normalizedLink = @normalized
                  OR e.link = @raw
               LIMIT 1";
@@ -290,6 +292,14 @@ public class AnnouncementsRepository
         using var connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         using var transaction = connection.BeginTransaction();
+        UpdateInTransaction(connection, transaction, a, editedByUserId);
+        transaction.Commit();
+    }
+
+    /// <summary>Сохраняет актуальные поля анонса и их аудит в общей транзакции.</summary>
+    private static void UpdateInTransaction(SqliteConnection connection, SqliteTransaction transaction,
+        Announcement a, long? editedByUserId)
+    {
         if (editedByUserId.HasValue)
         {
             foreach (var (field, value) in new (string Field, object? Value)[]
@@ -332,7 +342,6 @@ public class AnnouncementsRepository
         cmd.Parameters.AddWithValue("@cost", a.Cost);
         cmd.Parameters.AddWithValue("@costText", a.CostLabel is null ? DBNull.Value : a.CostLabel);
         cmd.ExecuteNonQuery();
-        transaction.Commit();
     }
 
     public IReadOnlyList<Announcement> FindByTournamentNameAndDateTimeUtcExceptId(
@@ -457,7 +466,7 @@ public class AnnouncementsRepository
         using var cmd = connection.CreateCommand();
         var toClause = toUtc is null ? string.Empty : " AND a.dateTimeUtc <= @to";
         cmd.CommandText =
-            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(p.link, e.link), a.cost_text
+            $@"SELECT a.id, a.tournamentName, a.place, a.dateTimeUtc, a.cost, COALESCE(e.link, p.link), a.cost_text
           FROM announcements AS a
           LEFT JOIN posts AS p ON p.id = a.id
           LEFT JOIN external_posts AS e ON e.announcementId = a.id

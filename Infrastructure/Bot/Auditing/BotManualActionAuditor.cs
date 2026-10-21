@@ -12,7 +12,8 @@ internal sealed class BotManualActionAuditor(
     UserManagementRepository users,
     AnnouncementReviewDraftRepository drafts,
     BotCommandHelper helper,
-    long allowedChatId)
+    long allowedChatId,
+    LiveJournalIdentityRepository? identities = null)
 {
     internal ManualAction? Begin(Update update)
     {
@@ -28,9 +29,8 @@ internal sealed class BotManualActionAuditor(
         var name = callback is not null ? CallbackName(callback.Data) :
             command ? CommandName(text!) : message?.Text is null ? message?.Type.ToString() ?? "unknown" :
             state?.Step.ToString() ?? "None";
-        var denied = callback is not null
-            ? message?.Chat.Id != allowedChatId
-            : user is not null && users.IsBanned(user.Id);
+        var denied = (callback is not null && message?.Chat.Id != allowedChatId) ||
+            (user is not null && users.IsBanned(user.Id));
         if (command && message?.Chat.Id != allowedChatId &&
             BotCommands.AdminOnly.Contains(name, StringComparer.OrdinalIgnoreCase)) denied = true;
 
@@ -50,7 +50,18 @@ internal sealed class BotManualActionAuditor(
             if (state?.Step == AddStep.WaitingId && !command)
                 action.SourceLink = helper.NormalizePostLink(text);
             ResolveLink(action);
-            action.BeforeJson = Snapshot(action, state);
+            var editCommand = command && name is BotCommands.EditName or BotCommands.EditPlace or
+                BotCommands.EditDateTime or BotCommands.EditCost or BotCommands.Delete;
+            var editInput = !command && callback is null && state?.Step is AddStep.EditWaitingName or
+                AddStep.EditWaitingPlace or AddStep.EditWaitingDateTime or AddStep.EditWaitingCost;
+            var actor = new AnnouncementActor(user?.Id, message?.Chat.Id == allowedChatId,
+                message?.Chat.Type == Telegram.Bot.Types.Enums.ChatType.Private);
+            if ((editCommand || editInput) &&
+                ((editInput && state?.EditChatId != message?.Chat.Id) ||
+                 (action.EntityId.HasValue && !announcements.CanManage(action.EntityId.Value, actor))))
+                action.Denied = true;
+            if (!action.Denied) action.BeforeJson = Snapshot(action, state);
+            else RedactDenied(action);
         }
         action.Id = repository.Begin(action);
         return action;
@@ -61,6 +72,7 @@ internal sealed class BotManualActionAuditor(
         AddAnnouncementState? current = null;
         if (action.UserId.HasValue) states.TryGet(action.UserId.Value, out current);
         action.StepAfter = current?.Step.ToString() ?? "None";
+        if (action.Denied) RedactDenied(action);
         if (!action.Denied)
         {
             if (action.StepBefore.StartsWith("Waiting", StringComparison.Ordinal) &&
@@ -78,6 +90,18 @@ internal sealed class BotManualActionAuditor(
                  action.StepBefore != "None" && action.StepBefore == action.StepAfter)
             action.Outcome = "awaiting_input";
         repository.Complete(action, exception?.GetType().FullName);
+    }
+
+    /// <summary>Оставляет у запрещённого действия только служебные метаданные.</summary>
+    private static void RedactDenied(ManualAction action)
+    {
+        action.Input = null;
+        action.SourceLink = null;
+        action.BeforeJson = null;
+        action.AfterJson = null;
+        action.State = null;
+        action.StepBefore = "None";
+        action.StepAfter = "None";
     }
 
     /// <summary>Извлекает имя команды независимо от имени бота и аргументов.</summary>
@@ -114,6 +138,13 @@ internal sealed class BotManualActionAuditor(
         if (command is not null)
         {
             var parts = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (action.Name is BotCommands.LjBind or BotCommands.LjUnbind or BotCommands.LjList)
+            {
+                action.EntityType = "lj_user";
+                if (parts.Length > 1 && long.TryParse(parts[1], out var telegramId) && telegramId > 0)
+                    action.EntityId = telegramId;
+                return;
+            }
             if (parts.Length > 1 && action.Name == BotCommands.FooterDel && long.TryParse(parts[1], out var footerId))
             {
                 action.EntityType = "footer";
@@ -185,6 +216,7 @@ internal sealed class BotManualActionAuditor(
             "review_draft" when action.EntityId.HasValue => drafts.Get(action.EntityId.Value),
             "pending_announcement" when action.EntityId.HasValue => users.GetPending(action.EntityId.Value),
             "footer" when action.EntityId.HasValue => FooterSnapshot(action.EntityId.Value),
+            "lj_user" => identities?.List(action.EntityId),
             _ => null
         };
         var savedByLink = string.IsNullOrEmpty(action.SourceLink) ? null : announcements.GetByLink(action.SourceLink);

@@ -128,6 +128,7 @@ internal class ModerationHandler
         var adminUserId = callbackQuery.From.Id;
         var state = _stateStore.AddOrUpdate(adminUserId);
         state.Existing = announcement;
+        state.EditChatId = _adminChatId;
 
         string prompt;
         switch (parts[1])

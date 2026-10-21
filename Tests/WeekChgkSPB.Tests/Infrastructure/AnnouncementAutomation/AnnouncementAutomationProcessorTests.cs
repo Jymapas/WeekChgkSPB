@@ -18,6 +18,80 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"weekchgk-{Guid.NewGuid():N}.db");
 
     [Theory]
+    [InlineData("Off")]
+    [InlineData("Shadow")]
+    [InlineData("Active")]
+    public async Task RssCheck_RefreshesAuthorOfExistingAnnouncementWithoutReparsing(string modeName)
+    {
+        var mode = Enum.Parse<AnnouncementAutomationMode>(modeName);
+        var context = CreateContext(mode);
+        var identities = new LiveJournalIdentityRepository(_dbPath);
+        context.Posts.Insert(CreatePost(42, "Команда — 1800 ₽"));
+        context.Announcements.Insert(CreateAnnouncement(42, "Rossi's", 1800));
+        var rssPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(rssPath, """
+                <rss version="2.0" xmlns:lj="http://www.livejournal.org/rss/lj/1.0/"><channel>
+                <title>Community</title><link>https://chgk-spb.livejournal.com</link><description>Posts</description>
+                <item><title>Game</title><link>https://chgk-spb.livejournal.com/42.html</link>
+                <description>Body</description><author>author_name</author>
+                <lj:poster>author_name</lj:poster><lj:posterid>700</lj:posterid></item></channel></rss>
+                """);
+            await global::Program.CheckOnceAsync(new RssFetcher(rssPath), context.Posts,
+                context.Announcements, identities, context.Processor, CancellationToken.None);
+            Assert.Equal(LjBindingResult.Linked, identities.Bind(55, "author_name", 1, true));
+            Assert.True(context.Announcements.CanManage(42, new AnnouncementActor(55, false, true)));
+            Assert.Equal(0, context.Extraction.CallCount);
+            Assert.Equal("Кубок знаний", context.Announcements.Get(42)!.TournamentName);
+        }
+        finally { File.Delete(rssPath); }
+    }
+
+    [Theory]
+    [InlineData("Off")]
+    [InlineData("Shadow")]
+    [InlineData("Active")]
+    public async Task DeletedAnnouncement_IsNotProcessedAgain(string modeName)
+    {
+        var mode = Enum.Parse<AnnouncementAutomationMode>(modeName);
+        var context = CreateContext(mode);
+        var post = CreatePost(42, "Команда — 1800 ₽");
+        context.Posts.Insert(post);
+        context.Announcements.Insert(CreateAnnouncement(42, "Rossi's", 1800));
+        context.Announcements.DeleteAuthorized(42, new AnnouncementActor(1, true, true));
+
+        Assert.False(context.Processor.ShouldProcessPost(42, isNewPost: true));
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Null(context.Announcements.Get(42));
+        Assert.Equal(0, context.Extraction.CallCount);
+        context.Channel.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        context.Notifier.Verify(n => n.NotifyNewPostAsync(It.IsAny<Post>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeletionDuringExtraction_PreventsAutomaticRecreation()
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        var post = CreatePost(42, "Команда — 1800 ₽");
+        context.Posts.Insert(post);
+        context.Extraction.DuringExtraction = () =>
+        {
+            context.Announcements.Insert(CreateAnnouncement(42, "Rossi's", 1800));
+            context.Announcements.DeleteAuthorized(42, new AnnouncementActor(1, true, true));
+        };
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Equal(1, context.Extraction.CallCount);
+        Assert.Null(context.Announcements.Get(42));
+        context.Channel.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+        context.Notifier.Verify(n => n.NotifyAutomationSavedAsync(It.IsAny<Post>(), It.IsAny<Announcement>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task ConflictingTime_RequiresManualDateBeforeSaving(bool active)
@@ -366,6 +440,7 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
 
     private sealed class FakeExtractionClient : IAnnouncementExtractionClient
     {
+        public Action? DuringExtraction { get; set; }
         public int CallCount { get; private set; }
         public AnnouncementExtractionResult Result { get; set; } =
             new(true, null, Candidate, 100, 40, 180);
@@ -378,6 +453,7 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
             CancellationToken cancellationToken)
         {
             CallCount++;
+            DuringExtraction?.Invoke();
             return Task.FromResult(Result);
         }
     }

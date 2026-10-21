@@ -58,3 +58,4 @@ nunit-*.xml
 .DS_Store
 .vscode
 *opi.sh
+__pycache__/

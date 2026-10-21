@@ -82,6 +82,9 @@ internal sealed class ManualActionsRepository
             UPDATE manual_actions SET handler=@handler, outcome=@outcome,
                 entity_type=@entityType, entity_id=@entityId, source_link=@link,
                 step_after=@step, after_json=@after, error_type=@error, completed_at_utc=@now
+                , input_text=CASE WHEN @denied THEN NULL ELSE input_text END
+                , before_json=CASE WHEN @denied THEN NULL ELSE before_json END
+                , step_before=CASE WHEN @denied THEN 'None' ELSE step_before END
             WHERE id=@id
             """;
         Add(command, "@id", action.Id);
@@ -92,6 +95,7 @@ internal sealed class ManualActionsRepository
         Add(command, "@link", action.SourceLink);
         Add(command, "@step", action.StepAfter);
         Add(command, "@after", action.AfterJson);
+        Add(command, "@denied", action.Denied);
         Add(command, "@error", errorType);
         Add(command, "@now", DateTime.UtcNow.ToString("O"));
         command.ExecuteNonQuery();

@@ -28,8 +28,10 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<UserManagementRepository>(),
             sp.GetRequiredService<AnnouncementReviewDraftRepository>(),
             sp.GetRequiredService<BotCommandHelper>(),
-            settings.ChatId));
+            settings.ChatId,
+            sp.GetRequiredService<LiveJournalIdentityRepository>()));
         services.AddSingleton(new PostsRepository(settings.DbPath));
+        services.AddSingleton(new LiveJournalIdentityRepository(settings.DbPath));
         services.AddSingleton(new FootersRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementsRepository(settings.DbPath));
         services.AddSingleton(new ChannelPostsRepository(settings.DbPath));
@@ -75,6 +77,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
         services.AddSingleton<IBotCommandHandler>(sp => new ForcePostCommandHandler(settings.ChannelId));
         services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
+        services.AddSingleton<IBotCommandHandler, LiveJournalCommandsHandler>();
         services.AddSingleton<IBotCommandHandler, CancelCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddCommandHandler>();

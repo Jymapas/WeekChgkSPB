@@ -62,14 +62,16 @@ public class PostsRepository
     {
         var rows = new List<(long Id, string Normalized)>();
         using var select = connection.CreateCommand();
-        select.CommandText = @"SELECT id, link FROM posts WHERE normalizedLink IS NULL OR normalizedLink = ''";
+        select.CommandText = @"SELECT id, link, normalizedLink FROM posts";
         using (var reader = select.ExecuteReader())
         {
             while (reader.Read())
             {
                 var id = reader.GetInt64(0);
                 var link = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                rows.Add((id, LinkNormalizer.Normalize(link)));
+                var normalized = LinkNormalizer.Normalize(link);
+                if (reader.IsDBNull(2) || reader.GetString(2) != normalized)
+                    rows.Add((id, normalized));
             }
         }
 
