@@ -57,7 +57,10 @@ public sealed class BotManualActionAuditTests : IDisposable
             {
                 new AddCommandHandler(), new AddLinesCommandHandler(), new CancelCommandHandler(),
                 new EditNameCommandHandler(updater.Object), new DeleteAnnouncementCommandHandler(updater.Object),
-                new FooterAddCommandHandler(), new FooterDeleteCommandHandler()
+                new FooterAddCommandHandler(), new FooterDeleteCommandHandler(),
+                new FooterListCommandHandler(), new FooterEditCommandHandler(),
+                new MakePostCommandHandler(BotCommands.MakePost, false),
+                new MakePostCommandHandler(BotCommands.MakePostLJ, true)
             },
             new IConversationFlowHandler[] { new AddAnnouncementFlow(updater.Object), new FooterFlow(), new AutomationReviewEditFlow(_drafts, review) },
             review, new ForcePostHandler(_announcements, _footers, new ChannelPostsRepository(_path), _bot.Object, null),
@@ -235,6 +238,82 @@ public sealed class BotManualActionAuditTests : IDisposable
         Assert.Null(row["input_text"]);
         Assert.Null(row["before_json"]);
         Assert.Null(row["after_json"]);
+    }
+
+    [Theory]
+    [InlineData("/footer_add")]
+    [InlineData("/FOOTER_ADD@WeekAnnouncementBot")]
+    [InlineData("/footer_del 1")]
+    [InlineData("/footer_list")]
+    [InlineData("/footer_edit")]
+    [InlineData("/makepost")]
+    [InlineData("/makepostlj")]
+    public async Task AdminCommandOutsideAdminChat_DoesNotExecuteEvenForAllowedUser(string command)
+    {
+        _users.AllowUser(10);
+        _footers.Insert("Original footer", null);
+        var update = MessageUpdate(command);
+        update.Message!.Chat.Id = 99;
+
+        await _runner.HandleUpdate(_bot.Object, update, CancellationToken.None);
+
+        Assert.Equal("Original footer", Assert.Single(_footers.ListAllDesc()).Text);
+        Assert.False(_states.TryGet(10, out _));
+        _bot.Verify(b => b.SendRequest<Message>(
+            It.Is<Telegram.Bot.Requests.SendMessageRequest>(r => r.Text == Messages.Bot.AccessDenied),
+            It.IsAny<CancellationToken>()), Times.Once);
+        var row = Assert.Single(Read());
+        Assert.Equal("denied", row["outcome"]);
+        Assert.Null(row["input_text"]);
+        Assert.Null(row["before_json"]);
+        Assert.Null(row["after_json"]);
+    }
+
+    [Theory]
+    [InlineData("FooterWaitingText", "Injected footer")]
+    [InlineData("FooterWaitingExpiry", "/skip")]
+    [InlineData("FooterEditWaitingText", "Injected footer")]
+    [InlineData("FooterEditWaitingExpiry", "/skip")]
+    [InlineData("PendingEditWaitingName", "Injected name")]
+    [InlineData("PendingEditWaitingPlace", "Injected place")]
+    [InlineData("PendingEditWaitingDateTime", "27.10.2026 19:30")]
+    [InlineData("PendingEditWaitingCost", "1")]
+    [InlineData("AutomationReviewWaitingName", "Injected name")]
+    [InlineData("AutomationReviewWaitingPlace", "Injected place")]
+    [InlineData("AutomationReviewWaitingDateTime", "27.10.2026 19:30")]
+    [InlineData("AutomationReviewWaitingCost", "1")]
+    public async Task AdminFlowContinuedOutsideAdminChat_IsDeniedAndRedacted(string step, string input)
+    {
+        var footerId = _footers.Insert("Original footer", DateTime.UtcNow.AddDays(1));
+        var state = _states.AddOrUpdate(10);
+        state.Step = Enum.Parse<AddStep>(step);
+        state.FooterEditId = footerId;
+        state.FooterDraftText = "Injected footer";
+        var update = MessageUpdate(input);
+        update.Message!.Chat.Id = 99;
+
+        await _runner.HandleUpdate(_bot.Object, update, CancellationToken.None);
+
+        var footer = Assert.Single(_footers.ListAllDesc());
+        Assert.Equal("Original footer", footer.Text);
+        Assert.NotNull(footer.ExpiresAt);
+        Assert.False(_states.TryGet(10, out _));
+        var row = Assert.Single(Read());
+        Assert.Equal("denied", row["outcome"]);
+        Assert.Null(row["input_text"]);
+        Assert.Null(row["before_json"]);
+        Assert.Null(row["after_json"]);
+    }
+
+    [Fact]
+    public async Task AdminFlowCanBeCancelledFromAnotherChat()
+    {
+        _states.AddOrUpdate(10).Step = AddStep.FooterWaitingText;
+        var update = MessageUpdate("/cancel");
+        update.Message!.Chat.Id = 99;
+        await _runner.HandleUpdate(_bot.Object, update, CancellationToken.None);
+        Assert.False(_states.TryGet(10, out _));
+        Assert.Equal("handled", Assert.Single(Read())["outcome"]);
     }
 
     [Theory]

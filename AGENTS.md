@@ -19,7 +19,7 @@
 - `.NET 9`
 - `Microsoft.Extensions.Hosting 9.0.0`
 - `Telegram.Bot 22.6.0`
-- `Microsoft.Data.Sqlite 9.0.7`
+- `Microsoft.Data.Sqlite 9.0.21`, `SQLitePCLRaw.bundle_e_sqlite3 3.0.5`, нативная `SQLite 3.54.1`
 - `System.ServiceModel.Syndication 9.0.7`
 - `DotNetEnv 3.1.1`
 - `xUnit`
@@ -160,6 +160,7 @@ Qwen никогда не определяет стоимость. Неодноз
 
 - Telegram-посты формируются в HTML
 - для дат анонсов используется таймзона `Europe/Moscow` или `Russian Standard Time` на Windows
+- поля анонса и URL экранируются как HTML; кликабельными становятся только HTTP/HTTPS-ссылки, остальные анонсы выводятся текстом. HTML в административных footer-строках сохраняется
 - scheduler публикует в канал только если слот попал в trigger window и еще не отмечен в `channel_posts`
 - `ChannelPostUpdater` нужен для обновления последнего поста канала после ручных изменений
 
@@ -180,6 +181,7 @@ Qwen никогда не определяет стоимость. Неодноз
 - используется long polling через `StartReceiving`
 - бот принимает `Message` и `CallbackQuery`
 - команды и flow обрабатываются отдельно
+- `BotRunner` проверяет админ-чат до вызова любой команды из `BotCommands.AdminOnly` и на каждом шаге административного диалога (footer, модерация и RSS-черновик); продолжение такого диалога из другого чата отклоняется и очищает состояние
 - состояние диалога хранится в памяти в `BotConversationState`, не в БД
 - для пользовательских анонсов есть модерация через inline callback-кнопки
 
@@ -402,7 +404,7 @@ Qwen никогда не определяет стоимость. Неодноз
 
 На момент последнего локального прогона:
 
-- `dotnet test` -> `338` прошло, `0` упало
+- `dotnet test` -> `365` прошло, `0` упало
 - `python3 -m unittest discover -s Tests/scripts` -> `12` прошло, `0` упало
 
 ## 11. Что обязательно тестировать при изменениях

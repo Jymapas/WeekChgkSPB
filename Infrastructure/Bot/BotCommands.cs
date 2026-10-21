@@ -91,6 +91,14 @@ public static class BotCommands
 
     public static IReadOnlyList<BotCommand> AsBotCommands() => AsAdminBotCommands();
 
+    internal static bool IsAdminOnlyStep(AddStep step) => step is
+        AddStep.FooterWaitingText or AddStep.FooterWaitingExpiry or
+        AddStep.FooterEditWaitingText or AddStep.FooterEditWaitingExpiry or
+        AddStep.PendingEditWaitingName or AddStep.PendingEditWaitingPlace or
+        AddStep.PendingEditWaitingDateTime or AddStep.PendingEditWaitingCost or
+        AddStep.AutomationReviewWaitingName or AddStep.AutomationReviewWaitingPlace or
+        AddStep.AutomationReviewWaitingDateTime or AddStep.AutomationReviewWaitingCost;
+
     private static IReadOnlyList<BotCommand> ToBotCommands(IEnumerable<string> source) =>
         source
             .Select(c =>

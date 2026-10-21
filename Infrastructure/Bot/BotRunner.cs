@@ -194,6 +194,12 @@ internal class BotRunner
             return false;
         }
 
+        if (!context.IsAdminChat && BotCommands.AdminOnly.Any(command => _helper.IsCommand(text, command)))
+        {
+            await DenyAdminActionAsync(context, action);
+            return true;
+        }
+
         foreach (var handler in _handlers)
         {
             if (!handler.CanHandle(context))
@@ -230,6 +236,12 @@ internal class BotRunner
 
         if (!_stateStore.TryGet(from.Id, out var state) || state is null || state.Step == AddStep.None)
         {
+            return;
+        }
+
+        if (!context.IsAdminChat && BotCommands.IsAdminOnlyStep(state.Step))
+        {
+            await DenyAdminActionAsync(context, action);
             return;
         }
 
@@ -303,6 +315,15 @@ internal class BotRunner
         }
 
         return result;
+    }
+
+    private async Task DenyAdminActionAsync(BotCommandContext context, ManualAction? action)
+    {
+        context.AccessDenied = true;
+        if (action is not null) action.Denied = true;
+        if (context.Message.From is { } from) _stateStore.Remove(from.Id);
+        await _bot.SendMessage(context.Message.Chat.Id, Messages.Bot.AccessDenied,
+            cancellationToken: context.CancellationToken);
     }
 
     private static void AddIfHandles(

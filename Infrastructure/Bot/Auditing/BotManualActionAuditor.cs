@@ -33,6 +33,9 @@ internal sealed class BotManualActionAuditor(
             (user is not null && users.IsBanned(user.Id));
         if (command && message?.Chat.Id != allowedChatId &&
             BotCommands.AdminOnly.Contains(name, StringComparer.OrdinalIgnoreCase)) denied = true;
+        if (callback is null && message?.Chat.Id != allowedChatId && state is not null &&
+            BotCommands.IsAdminOnlyStep(state.Step) &&
+            !BotCommands.User.Any(c => helper.IsCommand(message?.Text, c))) denied = true;
 
         var action = new ManualAction
         {
