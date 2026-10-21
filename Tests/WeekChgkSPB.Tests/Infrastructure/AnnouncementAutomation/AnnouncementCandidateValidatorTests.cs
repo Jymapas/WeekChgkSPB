@@ -66,6 +66,10 @@ public sealed class AnnouncementCandidateValidatorTests
     [InlineData("Sims To Be: Vol. 25", "Sims To Be-25", "Sims To Be-25")]
     [InlineData("Второй этап отбора на Чемпионат России среди студентов по интеллектуальным играм",
         "Второй этап отбора на Чемпионат России среди студентов по интеллектуальным играм", "Отбор на СтудЧР-2")]
+    [InlineData("ОВСЧ. Сезон 2026/2027. 1 этап", "ОВСЧ 1", "ОВСЧ-1")]
+    [InlineData("ОВСЧ. Сезон 2026/2027. 1 этап", "ОВСЧ-1", "ОВСЧ-1")]
+    [InlineData("ОВСЧ 1", "ОВСЧ-1", "ОВСЧ-1")]
+    [InlineData("Кубок Бесконечности: третий этап", "Кубок Бесконечности-3", "Кубок Бесконечности-3")]
     public void Validate_SavesCanonicalLocalName(string raw, string model, string expected)
     {
         var source = $"{raw} 27 октября 19:30 в клубе «Rossi's»";

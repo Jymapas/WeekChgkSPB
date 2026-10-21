@@ -31,7 +31,7 @@ internal sealed class TournamentNameNormalizer
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex RussianPartSuffixRegex = new(
-        @"\s*:\s*часть\s+(?<part>первая|вторая|третья|четвёртая|четвертая|пятая|шестая|седьмая|восьмая|девятая|десятая)\s*$",
+        @"(?:\s*:\s*часть\s+(?<part>первая|вторая|третья|четвёртая|четвертая|пятая|шестая|седьмая|восьмая|девятая|десятая)|\s*:\s*(?<stage>первый|второй|третий|четв[её]рт(?:ый|ой)|пятый|шестой|седьмой|восьмой|девятый|десятый)\s+этап)\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex WhitespaceRegex = new(
@@ -74,6 +74,9 @@ internal sealed class TournamentNameNormalizer
         }
 
         value = SyncSuffixRegex.Replace(value, " ");
+        value = Regex.Replace(value,
+            @"^ОВСЧ\s*\.?\s*(?:Сезон\s+20\d{2}\s*/\s*20\d{2}\s*\.\s*)?(?:[—–-]\s*|№\s*)?(?<stage>\d+)\s*(?:этап)?\s*$",
+            "ОВСЧ-${stage}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         value = YearRegex.Replace(value, string.Empty);
         value = NumberSignRegex.Replace(value, match => $"-{match.Groups["number"].Value}");
         value = RomanSuffixRegex.Replace(value, ReplaceRomanSuffix);
@@ -96,19 +99,21 @@ internal sealed class TournamentNameNormalizer
 
     private static string ReplaceRussianPartSuffix(Match match)
     {
-        var part = match.Groups["part"].Value.ToLowerInvariant();
+        var part = match.Groups["part"].Success
+            ? match.Groups["part"].Value.ToLowerInvariant()
+            : match.Groups["stage"].Value.ToLowerInvariant();
         var number = part switch
         {
-            "первая" => 1,
-            "вторая" => 2,
-            "третья" => 3,
-            "четвёртая" or "четвертая" => 4,
-            "пятая" => 5,
-            "шестая" => 6,
-            "седьмая" => 7,
-            "восьмая" => 8,
-            "девятая" => 9,
-            "десятая" => 10,
+            "первая" or "первый" => 1,
+            "вторая" or "второй" => 2,
+            "третья" or "третий" => 3,
+            "четвёртая" or "четвертая" or "четвёртый" or "четвертый" or "четвёртой" or "четвертой" => 4,
+            "пятая" or "пятый" => 5,
+            "шестая" or "шестой" => 6,
+            "седьмая" or "седьмой" => 7,
+            "восьмая" or "восьмой" => 8,
+            "девятая" or "девятый" => 9,
+            "десятая" or "десятый" => 10,
             _ => 0
         };
         return number == 0 ? match.Value : $"-{number}";
