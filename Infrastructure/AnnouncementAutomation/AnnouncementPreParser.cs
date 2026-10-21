@@ -64,6 +64,10 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         @"(?<!\d)(?<amount>\d[\d ]{2,5})\s*(?:руб(?:\.|лей|ля)?|₽)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
+    private static readonly Regex StandaloneMoneyRegex = new(
+        @"^\s*\d[\d ]{2,5}\s*(?:руб(?:\.|лей|ля)?|₽)\s*[.!]?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
     private static readonly Regex TeamCapacityRegex = new(
         @"(?:до|из)?\s*(?<capacity>[1-6])(?:\s*[-–—]?\s*(?:ти|х))?\s*(?:чел(?:овек(?:а|у|ом)?|овек)?|игрок(?:а|ов)?)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
@@ -333,8 +337,14 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             }
 
             var money = MoneyRegex.Match(line);
-            if (!money.Success ||
-                !TryGetTeamCapacity(line, money.Index, i == start, out var capacity))
+            if (!money.Success)
+            {
+                continue;
+            }
+
+            var hasTeamPrice = TryGetTeamCapacity(line, money.Index, i == start, out var capacity);
+            var isStandalonePrimaryPrice = i == start + 1 && StandaloneMoneyRegex.IsMatch(line);
+            if (!hasTeamPrice && !isStandalonePrimaryPrice)
             {
                 continue;
             }

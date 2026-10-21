@@ -66,6 +66,26 @@ public sealed class AnnouncementPreParserTests
     }
 
     [Fact]
+    public void Parse_UsesStandalonePriceImmediatelyAfterCostHeadingAsPrimaryTariff()
+    {
+        var post = new Post
+        {
+            Id = 3420687,
+            Title = "2 ноября (понедельник) 19:30 - \"Кубок Эквестрии — 51 (синхрон)\" в \"БарБоссов\"",
+            Description =
+                "2 ноября (понедельник) 19:30 - \"Кубок Эквестрии — 51 (синхрон)\" в \"БарБоссов\", Владимирский пр. 15<br>" +
+                "Начало регистрации 19-00, начало турнира 19-30<br>" +
+                "Стоимость турнира:<br>1650 рублей<br>1350 рублей - студенты и пары"
+        };
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.True(result.Success, result.FailureCode);
+        Assert.Equal(1650, result.Cost);
+        Assert.Equal("1650 рублей", result.CostEvidence);
+    }
+
+    [Fact]
     public void Parse_UsesTitleAsEventLineWhenBodyHasNoDate()
     {
         var post = new Post
