@@ -25,7 +25,7 @@ public sealed class AnnouncementProductionRegressionTests
             Assert.NotNull(result.Place);
         }
         if (id == 3416859) Assert.Equal("Соус", result.Place);
-        if (id == 3418371) Assert.Null(result.LocalDateTime);
+        if (id == 3418371) Assert.Equal(new DateTime(2026, 10, 26, 19, 30, 0), result.LocalDateTime);
         if (id == 3418779) Assert.Equal(new DateTime(2026, 11, 29, 13, 0, 0), result.LocalDateTime);
         if (id == 3416539) Assert.Equal(new DateTime(2026, 11, 1, 12, 0, 0), result.LocalDateTime);
     }
@@ -79,7 +79,7 @@ public sealed class AnnouncementProductionRegressionTests
             3418371L,
             "26 октября (понедельник) 19:00 \"Серия B-52: сезон 04, эпизод 03 (синхрон)\" в \"БарБоссов\"",
             "Уважаемые команды!<br /><br />26 октября (понедельник) 19:00 \"Серия B-52: сезон 04, эпизод 03 (синхрон)\" в \"БарБоссов\", Владимирский пр. 15 ( м.Владимирская/Достоевская)<br /><br /><br />Начало регистрации 19-00, начало турнира 19-30<br />3 туров по 12 вопросов<br />Сложность заявленная / TrueDL: 2<br /><br />Стоимость турнира:<br />2100 руб с команды до 6ти человек<br />1950 руб с команды до 5ти человек<br />1800 рублей - 4 человек<br />1650 рублей - 3 человека<br />1500 рублей - 2 человека<br /><br />Депозита нет.<br /><br />Победителю площадки - приз бутылка \"Игристого\"<br /><br />Редактор:<br />Буценец Дмитрий Анатольевич<br />Волков Андрей Владимирович<br />Кудрявцев Александр Александрович<br /><br />",
-            "datetime_conflict"
+            null!
         };
         yield return new object[]
         {

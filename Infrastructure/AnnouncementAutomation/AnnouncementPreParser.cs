@@ -130,9 +130,36 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             var gameTimes = lines.Select(FindGameTime).Where(match => match.Success)
                 .Select(TimeOfDay).Distinct().ToList();
             var titleTime = TimeRegex.Match(title);
+            var registrationLine = lines.Select(line =>
+            {
+                var registration = Regex.Match(line, @"начало регистрации\s*(?:в\s*)?",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+                var registrationTime = registration.Success
+                    ? TimeRegex.Match(line, registration.Index + registration.Length)
+                    : Match.Empty;
+                var gameTime = FindGameTime(line);
+                return (Line: line, Registration: registration, RegistrationTime: registrationTime, GameTime: gameTime);
+            }).FirstOrDefault(item => item.RegistrationTime.Success && item.GameTime.Success &&
+                item.RegistrationTime.Index == item.Registration.Index + item.Registration.Length &&
+                item.GameTime.Index > item.RegistrationTime.Index && titleTime.Success &&
+                TimeOfDay(item.RegistrationTime) == TimeOfDay(titleTime) &&
+                Regex.IsMatch(item.Line[(item.RegistrationTime.Index + item.RegistrationTime.Length)..item.GameTime.Index],
+                    @"^\s*[,;.]\s*начало турнира\s*(?:в\s*)?$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout));
+            var useGameTime = hasLocalDateTime && gameTimes.Count == 1 &&
+                registrationLine.RegistrationTime is not null && registrationLine.RegistrationTime.Success &&
+                TimeOfDay(titleTime) != gameTimes[0];
+            if (useGameTime)
+            {
+                localDateTime = localDateTime.Date.Add(gameTimes[0]);
+                var start = registrationLine.Registration.Index;
+                var end = registrationLine.GameTime.Index + registrationLine.GameTime.Length;
+                if (end > start)
+                    compactEventText += "\n" + registrationLine.Line[start..end];
+            }
             var timeConflict = gameTimes.Count > 1 ||
                 (titleTime.Success && gameTimes.Count == 1 &&
-                 TimeOfDay(titleTime) != gameTimes[0]);
+                 TimeOfDay(titleTime) != gameTimes[0] && !useGameTime);
 
             if (!price.Success)
             {

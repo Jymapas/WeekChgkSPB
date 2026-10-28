@@ -61,6 +61,33 @@ public sealed class AnnouncementCandidateValidatorTests
         Assert.Equal(expected, result.Success);
     }
 
+    [Fact]
+    public void Validate_AcceptsExplicitGameStartAndRejectsRegistrationTime()
+    {
+        var post = new Post
+        {
+            Id = 3422805,
+            Title = "9 ноября 19:00 \"Кубок знаний\" в \"БарБоссов\"",
+            Description = "9 ноября 19:00 \"Кубок знаний\" в \"БарБоссов\"<br>" +
+                          "Начало регистрации 19-00, начало турнира 19-30<br>" +
+                          "Стоимость: 2100 руб с команды до 6 человек"
+        };
+        var preParse = new AnnouncementPreParser(PostFormatter.Moscow).Parse(post,
+            new DateTime(2026, 10, 28, 0, 0, 0, DateTimeKind.Utc));
+        var evidence = new AnnouncementExtractionEvidence("Кубок знаний", "БарБоссов", preParse.CompactEventText);
+        var validator = new AnnouncementCandidateValidator(new TournamentNameNormalizer(), PostFormatter.Moscow);
+        var game = new AnnouncementExtractionCandidate("Кубок знаний", "Кубок знаний", "БарБоссов",
+            "2026-11-09T19:30", evidence);
+        var registration = game with { LocalDateTime = "2026-11-09T19:00" };
+
+        var accepted = validator.Validate(post, preParse, game);
+        var rejected = validator.Validate(post, preParse, registration);
+
+        Assert.True(accepted.Success, accepted.FailureCode);
+        Assert.Equal(new DateTime(2026, 11, 9, 16, 30, 0, DateTimeKind.Utc), accepted.Announcement!.DateTimeUtc);
+        Assert.Equal("datetime_mismatch", rejected.FailureCode);
+    }
+
     [Theory]
     [InlineData("Ночь кошмаров — 2026 (синхрон)", "Ночь кошмаров — 2026", "Ночь кошмаров")]
     [InlineData("Sims To Be: Vol. 25", "Sims To Be-25", "Sims To Be-25")]

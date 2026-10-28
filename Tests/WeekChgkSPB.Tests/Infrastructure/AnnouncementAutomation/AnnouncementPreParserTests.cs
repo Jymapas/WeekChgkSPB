@@ -234,6 +234,25 @@ public sealed class AnnouncementPreParserTests
         Assert.Equal(expectedFailure, result.FailureCode);
     }
 
+    [Fact]
+    public void Parse_UsesGameStartWhenTitleMatchesRegistrationTime()
+    {
+        var post = new Post
+        {
+            Id = 3422805,
+            Title = "9 ноября (понедельник) 19:00 \"Серия B-52: сезон 04, эпизод 05 (синхрон)\" в \"БарБоссов\"",
+            Description = "9 ноября (понедельник) 19:00 \"Серия B-52\" в \"БарБоссов\"<br>" +
+                          "Начало регистрации 19-00, начало турнира 19-30<br>" +
+                          "Стоимость турнира:<br>2100 руб с команды до 6ти человек"
+        };
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.True(result.Success, result.FailureCode);
+        Assert.Equal(new DateTime(2026, 11, 9, 19, 30, 0), result.LocalDateTime);
+        Assert.Contains("Начало регистрации 19-00, начало турнира 19-30", result.CompactEventText);
+    }
+
     private static Post CreatePost(string costBlock) => new()
     {
         Id = 42,

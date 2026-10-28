@@ -29,6 +29,7 @@ internal sealed class QwenAnnouncementExtractionClient(
           }
         }
         Every value must be a non-empty JSON string. Evidence values must be exact substrings of the supplied event. Never insert ellipses, paraphrase, or join separated fragments.
+        Use the explicit start of the tournament rather than registration time when both are given.
         For date/time evidence, quote the entire contiguous span containing both date and game time, even across lines.
         Normalize Sims To Be: Vol. N to Sims To Be-N; remove standalone years and (Финал ЛВ).
         Normalize Второй этап отбора на Чемпионат России среди студентов по интеллектуальным играм to Отбор на СтудЧР-2.
