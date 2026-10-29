@@ -164,6 +164,37 @@ public sealed class AnnouncementPreParserTests
     }
 
     [Fact]
+    public void Parse_SeparatesContributionInSingleParagraph()
+    {
+        var post = new Post
+        {
+            Id = 3423227,
+            Title = "\"Синхрон простых вопросов. Ноябрь\" в понедельник 9-го ноября в в ресторане \"Райский уголок\"",
+            Description = "<p>Уважаемые коллеги! Приглашаем вас отыграть \"Синхрон простых вопросов. Ноябрь\" в понедельник 9-го ноября в в ресторане \"Райский уголок\" по адресу ул. Рузовская, дом 16 (8 минут пешком от метро Пушкинская). Начало регистрации в 19:15, первый вопрос будет задан в 19:30. Редакторы: Сергей Васильченко, Сергей Шорин и Анвар Мухаметкалиев. Заявленная сложность: 3. Взнос - 2100 рублей. Все финансовые расчёты только на игре.</p>"
+        };
+
+        var result = _parser.Parse(post, new DateTime(2026, 10, 28, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.True(result.Success, result.FailureCode);
+        Assert.Equal(2100, result.Cost);
+        Assert.Equal(new DateTime(2026, 11, 9, 19, 30, 0), result.LocalDateTime);
+        Assert.Equal("Райский уголок", result.Place);
+        Assert.DoesNotContain("2100", result.CompactEventText);
+    }
+
+    [Fact]
+    public void Parse_RejectsCompetingContributionsInSingleParagraph()
+    {
+        var post = CreatePost("Взнос: для играющих в зачёт ЧР — 4800, для остальных — 4200.");
+        post.Description = post.Description.Replace("<br>Взнос", ". Взнос", StringComparison.Ordinal);
+
+        var result = _parser.Parse(post, Now);
+
+        Assert.Equal("cost_ambiguous", result.FailureCode);
+        Assert.False(result.CanCallApi);
+    }
+
+    [Fact]
     public void Parse_SupportsContributionAndGameTimeOnFollowingLine()
     {
         var post = new Post

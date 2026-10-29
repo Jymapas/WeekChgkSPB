@@ -271,6 +271,10 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         decoded = BreakRegex.Replace(decoded, "\n");
         decoded = TagsRegex.Replace(decoded, " ");
         decoded = WhitespaceRegex.Replace(decoded, " ");
+        // RSS иногда объединяет весь анонс в один абзац. Отделяем ценовой
+        // раздел, чтобы распознать тариф и не передавать его в запрос модели.
+        decoded = Regex.Replace(decoded, @"(?<=[.!?])\s+(?=взнос\b|стоимость\b)", "\n",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         return BlankLinesRegex.Replace(decoded, "\n").Trim();
     }
 
