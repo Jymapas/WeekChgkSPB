@@ -23,6 +23,7 @@ public static class BotCommands
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
     public const string FooterEdit = "/footer_edit";
+    public const string CheckLJ = "/check_lj";
     public const string LjBind = "/lj_bind";
     public const string LjUnbind = "/lj_unbind";
     public const string LjList = "/lj_list";
@@ -36,6 +37,7 @@ public static class BotCommands
         FooterList,
         FooterDel,
         FooterEdit,
+        CheckLJ,
         LjBind,
         LjUnbind,
         LjList,
@@ -80,6 +82,7 @@ public static class BotCommands
         [FooterList] = "Список футеров",
         [FooterDel] = "Удалить футер",
         [FooterEdit] = "Редактировать футер",
+        [CheckLJ] = "Проверить новые посты ЖЖ",
         [LjBind] = "Связать Telegram-пользователя с автором ЖЖ",
         [LjUnbind] = "Удалить связь с автором ЖЖ",
         [LjList] = "Показать связи с авторами ЖЖ",

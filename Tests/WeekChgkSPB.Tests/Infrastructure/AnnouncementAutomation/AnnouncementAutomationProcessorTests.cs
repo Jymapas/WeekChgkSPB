@@ -38,8 +38,8 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
                 <description>Body</description><author>author_name</author>
                 <lj:poster>author_name</lj:poster><lj:posterid>700</lj:posterid></item></channel></rss>
                 """);
-            await global::Program.CheckOnceAsync(new RssFetcher(rssPath), context.Posts,
-                context.Announcements, identities, context.Processor, CancellationToken.None);
+            await new RssPoller(new RssFetcher(rssPath), context.Posts,
+                context.Announcements, identities, context.Processor).CheckAsync(CancellationToken.None);
             Assert.Equal(LjBindingResult.Linked, identities.Bind(55, "author_name", 1, true));
             Assert.True(context.Announcements.CanManage(42, new AnnouncementActor(55, false, true)));
             Assert.Equal(0, context.Extraction.CallCount);

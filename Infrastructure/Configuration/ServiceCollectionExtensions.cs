@@ -38,6 +38,8 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton(new UserManagementRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementParseAttemptsRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementReviewDraftRepository(settings.DbPath));
+        services.AddSingleton<RssPoller>();
+        services.AddSingleton<IBotCommandHandler, CheckLiveJournalCommandHandler>();
         services.AddSingleton(new RssFetcher(rssUrl));
         services.AddSingleton(settings.AutomationOptions);
         services.AddSingleton(PostFormatter.Moscow);

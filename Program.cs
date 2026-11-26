@@ -34,10 +34,7 @@ internal class Program
         using var scope = host.Services.CreateScope();
         var services = scope.ServiceProvider;
 
-        var repo = services.GetRequiredService<PostsRepository>();
-        var announcementsRepo = services.GetRequiredService<AnnouncementsRepository>();
-        var fetcher = services.GetRequiredService<RssFetcher>();
-        var identities = services.GetRequiredService<LiveJournalIdentityRepository>();
+        var poller = services.GetRequiredService<RssPoller>();
         var automationProcessor = services.GetRequiredService<AnnouncementAutomationProcessor>();
         var botRunner = services.GetRequiredService<BotRunner>();
         var botClient = services.GetRequiredService<ITelegramBotClient>();
@@ -86,10 +83,10 @@ internal class Program
             commands: adminCommands,
             scope: new BotCommandScopeChat { ChatId = settings.ChatId },
             cancellationToken: cts.Token);
-        botRunner.Start(cts.Token);
 
         await automationProcessor.ReconcileVenueChangesAsync(DateTime.UtcNow, cts.Token);
-        await CheckOnceAsync(fetcher, repo, announcementsRepo, identities, automationProcessor, cts.Token);
+        await poller.CheckAsync(cts.Token);
+        botRunner.Start(cts.Token);
         var lastRssCheck = DateTime.UtcNow;
 
         if (scheduler is not null)
@@ -104,7 +101,7 @@ internal class Program
             {
                 if (DateTime.UtcNow - lastRssCheck >= TimeSpan.FromHours(1))
                 {
-                    await CheckOnceAsync(fetcher, repo, announcementsRepo, identities, automationProcessor, cts.Token);
+                    await poller.CheckAsync(cts.Token);
                     lastRssCheck = DateTime.UtcNow;
                 }
 
@@ -120,65 +117,6 @@ internal class Program
         }
 
         await host.StopAsync();
-    }
-
-    internal static async Task CheckOnceAsync(RssFetcher fetcher, PostsRepository repo, AnnouncementsRepository announcementsRepo,
-        LiveJournalIdentityRepository identities, AnnouncementAutomationProcessor automationProcessor,
-        CancellationToken ct)
-    {
-        try
-        {
-            var feedPosts = fetcher.FetchPosts();
-            var feedIds = feedPosts
-                .Where(p => p.Id != 0)
-                .Select(p => p.Id)
-                .ToList();
-
-            foreach (var post in feedPosts.Where(p => p.Id != 0))
-            {
-                identities.SaveAuthor(post);
-                var isNewPost = !repo.Exists(post.Id);
-                var isVenueChange = AnnouncementPreParser.IsVenueChange(post);
-                var hasAnnouncement = announcementsRepo.Exists(post.Id);
-                if (!hasAnnouncement && !string.IsNullOrWhiteSpace(post.Link))
-                {
-                    hasAnnouncement = announcementsRepo.GetByLink(post.Link) is not null;
-                }
-
-                if (isNewPost)
-                {
-                    repo.Insert(post);
-                }
-
-                if (hasAnnouncement && !isVenueChange)
-                {
-                    continue;
-                }
-
-                if (!automationProcessor.ShouldProcessPost(post.Id, isNewPost, isVenueChange))
-                {
-                    continue;
-                }
-
-                Console.WriteLine($"Processing post: {post.Id} — {post.Title}");
-                try
-                {
-                    await automationProcessor.ProcessAsync(post, DateTime.UtcNow, ct);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Announcement processing failed: {e.Message}");
-                }
-
-                await Task.Delay(250, ct);
-            }
-
-            repo.DeleteWithoutAnnouncementsNotInFeed(feedIds);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"RSS/DB error: {e.Message}");
-        }
     }
 
     private static bool TryLoadSettings(out AppSettings settings)
