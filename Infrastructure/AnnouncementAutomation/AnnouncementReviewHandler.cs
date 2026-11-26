@@ -50,6 +50,25 @@ internal sealed class AnnouncementReviewHandler(
         attempts.MarkNotified(draft.PostId);
     }
 
+    public async Task RemindPendingAsync(DateTime nowUtc, CancellationToken ct)
+    {
+        foreach (var id in drafts.GetDueForReminder(nowUtc))
+        {
+            ct.ThrowIfCancellationRequested();
+            var draft = drafts.Get(id);
+            var post = posts.Get(id);
+            if (draft?.Status != AnnouncementReviewStatuses.Pending || post is null ||
+                announcements.Exists(id) || announcements.GetByLink(post.Link) is not null ||
+                announcements.IsAutomationSuppressed(id, post.Link))
+                continue;
+
+            var message = await bot.SendMessage(adminChatId,
+                $"Напоминание: {WebUtility.HtmlEncode(post.Title)}\n{FormatReview(draft)}",
+                ParseMode.Html, replyMarkup: BuildKeyboard(draft), cancellationToken: ct);
+            drafts.MarkReminderSent(id, nowUtc, message.MessageId);
+        }
+    }
+
     public async Task<bool> HandleCallbackQuery(
         CallbackQuery callbackQuery,
         CancellationToken cancellationToken)

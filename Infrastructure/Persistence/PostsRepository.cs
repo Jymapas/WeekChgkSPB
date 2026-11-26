@@ -269,6 +269,9 @@ public class PostsRepository
             cmd.Parameters.AddWithValue(paramName, keepIds[i]);
         }
 
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='announcement_review_drafts'";
+        var pendingFilter = cmd.ExecuteScalar() is null ? string.Empty :
+            "AND NOT EXISTS (SELECT 1 FROM announcement_review_drafts WHERE post_id=posts.id AND status='pending')";
         var keepClause = string.Join(", ", placeholders);
         cmd.CommandText =
             $@"DELETE FROM posts
@@ -276,6 +279,7 @@ public class PostsRepository
                    SELECT 1 FROM announcements AS a
                    WHERE a.id = posts.id
                )
+               {pendingFilter}
                AND posts.id NOT IN ({keepClause})";
         return cmd.ExecuteNonQuery();
     }

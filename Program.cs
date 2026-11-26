@@ -87,6 +87,8 @@ internal class Program
         await automationProcessor.ReconcileVenueChangesAsync(DateTime.UtcNow, cts.Token);
         await poller.CheckAsync(cts.Token);
         botRunner.Start(cts.Token);
+        var reviews = services.GetRequiredService<AnnouncementReviewHandler>();
+        var nextReminderCheck = DateTime.UtcNow;
         var lastRssCheck = DateTime.UtcNow;
 
         if (scheduler is not null)
@@ -103,6 +105,20 @@ internal class Program
                 {
                     await poller.CheckAsync(cts.Token);
                     lastRssCheck = DateTime.UtcNow;
+                }
+
+                if (DateTime.UtcNow >= nextReminderCheck)
+                {
+                    try
+                    {
+                        await reviews.RemindPendingAsync(DateTime.UtcNow, cts.Token);
+                        nextReminderCheck = DateTime.UtcNow.AddHours(1);
+                    }
+                    catch (Exception ex) when (!cts.IsCancellationRequested)
+                    {
+                        Console.WriteLine($"Review reminder failed: {ex.GetType().Name}");
+                        nextReminderCheck = DateTime.UtcNow.AddMinutes(5);
+                    }
                 }
 
                 if (scheduler is not null)

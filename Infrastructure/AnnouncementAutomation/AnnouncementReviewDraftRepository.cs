@@ -120,6 +120,37 @@ internal sealed class AnnouncementReviewDraftRepository
         };
     }
 
+    public List<long> GetDueForReminder(DateTime nowUtc)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT d.post_id FROM announcement_review_drafts d
+            JOIN posts p ON p.id = d.post_id
+            WHERE d.status = 'pending' AND d.updated_at_utc <= @cutoff
+            ORDER BY d.updated_at_utc, d.post_id
+            """;
+        command.Parameters.AddWithValue("@cutoff", nowUtc.AddDays(-1).ToString("O"));
+        using var reader = command.ExecuteReader();
+        var ids = new List<long>();
+        while (reader.Read()) ids.Add(reader.GetInt64(0));
+        return ids;
+    }
+
+    public void MarkReminderSent(long postId, DateTime nowUtc, int messageId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE announcement_review_drafts SET updated_at_utc=@now, review_message_id=@message
+            WHERE post_id=@id AND status='pending'
+            """;
+        command.Parameters.AddWithValue("@id", postId);
+        command.Parameters.AddWithValue("@message", messageId);
+        command.Parameters.AddWithValue("@now", nowUtc.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
     public void SetSourceMessageId(long postId, int messageId) =>
         SetMessageId(postId, "source_message_id", messageId);
 

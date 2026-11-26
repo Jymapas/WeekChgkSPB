@@ -149,6 +149,36 @@ public sealed class AnnouncementReviewHandlerTests : IDisposable
         Assert.False(context.StateStore.TryGet(1000, out _));
     }
 
+    [Fact]
+    public async Task Reminders_SurviveCleanupAndSkipOnlyTheSelectedDraft()
+    {
+        var context = CreateContext();
+        var now = DateTime.UtcNow;
+        foreach (var id in new[] { 51, 52, 53 })
+        {
+            context.Posts.Insert(CreatePost(id));
+            context.Drafts.Upsert(new AnnouncementReviewDraft { PostId = id });
+        }
+        context.Announcements.Insert(new Announcement
+        {
+            Id = 53, TournamentName = "Game", Place = "Venue", Cost = 100, DateTimeUtc = now
+        });
+        context.Posts.DeleteWithoutAnnouncementsNotInFeed([54]);
+        await context.Handler.RemindPendingAsync(now, CancellationToken.None);
+        Assert.Empty(context.SentRequests);
+        await context.Handler.RemindPendingAsync(now.AddHours(25), CancellationToken.None);
+        Assert.Equal(2, context.SentRequests.Count);
+        var skip = GetKeyboard(context.SentRequests[0]).InlineKeyboard.SelectMany(row => row)
+            .Single(b => b.CallbackData == "autoreview_skip_51");
+        await context.Handler.HandleCallbackQuery(CreateCallback(skip.CallbackData!), CancellationToken.None);
+        context.SentRequests.Clear();
+        await context.Handler.RemindPendingAsync(now.AddHours(26), CancellationToken.None);
+        Assert.Empty(context.SentRequests);
+        await context.Handler.RemindPendingAsync(now.AddHours(49), CancellationToken.None);
+        Assert.Contains(GetKeyboard(Assert.Single(context.SentRequests)).InlineKeyboard.SelectMany(row => row),
+            b => b.CallbackData == "autoreview_skip_52");
+    }
+
     private ReviewContext CreateContext()
     {
         var posts = new PostsRepository(_dbPath);
