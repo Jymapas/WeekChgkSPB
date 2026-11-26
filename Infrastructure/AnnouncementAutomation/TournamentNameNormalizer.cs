@@ -49,17 +49,18 @@ internal sealed class TournamentNameNormalizer
         var value = rawName.Trim().Trim('"', '\'', '«', '»');
         value = Regex.Replace(
             value,
-            @"^\s*Международный\s+турнир\s+",
+            @"^\s*(?:Международный|Строго\s+синхронный)\s+турнир\s+",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
             RegexTimeout);
 
+        value = value.Trim('"', '«', '»').TrimEnd('.');
         value = Regex.Replace(value, @"\s*\(\s*Финал ЛВ\s*\)", string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         value = Regex.Replace(value, @"^Sims To Be\s*:\s*Vol\.\s*(\d+)\s*$", "Sims To Be-$1",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         value = Regex.Replace(value,
-            @"^(?<stage>Первый|Второй|Третий|Четв[её]ртый) этап отбора на Чемпионат России среди студентов по интеллектуальным играм$",
+            @"^(?<stage>Первый|Второй|Третий|Четв[её]ртый) этап отбора на (?:Чемпионат России|ЧР) среди студентов(?: по интеллектуальным играм)?$",
             match => "Отбор на СтудЧР-" + (match.Groups["stage"].Value.ToLowerInvariant() switch
             {
                 "первый" => "1", "второй" => "2", "третий" => "3", _ => "4"
@@ -77,6 +78,11 @@ internal sealed class TournamentNameNormalizer
         value = Regex.Replace(value,
             @"^ОВСЧ\s*\.?\s*(?:Сезон\s+20\d{2}\s*/\s*20\d{2}\s*\.\s*)?(?:[—–-]\s*|№\s*)?(?<stage>\d+)\s*(?:этап)?\s*$",
             "ОВСЧ-${stage}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value, @"\s*\(20\d{2}\)\s*$", string.Empty, RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value, @"^Плюс\s+(\d+)$", "Плюс-$1", RegexOptions.IgnoreCase, RegexTimeout);
+        value = Regex.Replace(value, @"^(Бесконечные Земли):\s*том\s+([IVXLCDM]+)\s*$",
+            match => $"{match.Groups[1].Value}-{TryParseRoman(match.Groups[2].Value)}",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         value = YearRegex.Replace(value, string.Empty);
         value = NumberSignRegex.Replace(value, match => $"-{match.Groups["number"].Value}");
         value = RomanSuffixRegex.Replace(value, ReplaceRomanSuffix);

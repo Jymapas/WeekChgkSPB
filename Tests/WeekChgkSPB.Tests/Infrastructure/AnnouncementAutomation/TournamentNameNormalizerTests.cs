@@ -17,6 +17,11 @@ public sealed class TournamentNameNormalizerTests
     }
 
     [Theory]
+    [InlineData("Бесконечные Земли: том LXVII (синхрон)", "Бесконечные Земли-67")]
+    [InlineData("Der Spiegel -1 (2026)", "Der Spiegel-1")]
+    [InlineData("Третий этап отбора на ЧР среди студентов", "Отбор на СтудЧР-3")]
+    [InlineData("Строго синхронный турнир «FAST / CUP #0»", "FAST / CUP #0")]
+    [InlineData("Плюс 4", "Плюс-4")]
     [InlineData("Sims To Be: Vol. 25", "Sims To Be-25")]
     [InlineData("Ночь кошмаров — 2026 (синхрон)", "Ночь кошмаров")]
     [InlineData("Топ-1000 XXVI. Тайный Топтышка (Финал ЛВ)", "Топ-1000 XXVI. Тайный Топтышка")]

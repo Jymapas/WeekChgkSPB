@@ -82,6 +82,8 @@ internal sealed class AnnouncementCandidateValidator(
         });
     }
 
+    public string NormalizeSourceName(string rawName) => nameNormalizer.Normalize(rawName);
+
     private static bool ContainsEvidence(string source, string? evidence) =>
         !string.IsNullOrWhiteSpace(evidence) &&
         source.Contains(evidence.Trim(), StringComparison.OrdinalIgnoreCase);

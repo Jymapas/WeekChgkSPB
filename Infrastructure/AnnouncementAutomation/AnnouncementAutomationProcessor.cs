@@ -292,7 +292,9 @@ internal sealed class AnnouncementAutomationProcessor(
         {
             PostId = post.Id,
             TournamentName = validatedAnnouncement?.TournamentName ??
-                             NullIfWhiteSpace(candidate?.TournamentName),
+                             (failureCode == "name_normalization_mismatch" && candidate is not null
+                                 ? validator.NormalizeSourceName(candidate.RawTournamentName)
+                                 : NullIfWhiteSpace(candidate?.TournamentName)),
             Place = validatedAnnouncement?.Place ??
                     NullIfWhiteSpace(preParse.Place) ??
                     NullIfWhiteSpace(candidate?.Place),
