@@ -150,6 +150,16 @@ internal sealed class AnnouncementAutomationProcessor(
             return;
         }
 
+        var game = validation.Announcement;
+        var sameSlot = announcements.FindByTournamentNameAndDateTimeUtcExceptId(
+            game.TournamentName, game.DateTimeUtc, post.Id);
+        if (sameSlot.Any(existing => string.Equals(existing.Place, game.Place, StringComparison.OrdinalIgnoreCase)))
+        {
+            await CreateReviewAsync(post, preParse, extraction, "possible_duplicate",
+                extraction.Candidate, game, cancellationToken);
+            return;
+        }
+
         SaveAttempt(post.Id, preParse, extraction, "accepted", null, extraction.Candidate);
         if (!announcements.TryInsertAutomatically(validation.Announcement, post.Link))
         {

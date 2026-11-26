@@ -127,6 +127,22 @@ public sealed class AnnouncementAutomationProcessorTests : IDisposable
         context.Notifier.Verify(notifier => notifier.NotifyNewPostAsync(It.IsAny<Post>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData("Rossi's", true)]
+    [InlineData("Другая площадка", false)]
+    public async Task Active_ChecksSameTournamentAndVenueAcrossDifferentLinks(string place, bool needsReview)
+    {
+        var context = CreateContext(AnnouncementAutomationMode.Active);
+        context.Announcements.Insert(CreateAnnouncement(200, place, 1800));
+        var post = CreatePost(201, "Команда — 1800 ₽");
+        context.Posts.Insert(post);
+
+        await context.Processor.ProcessAsync(post, Now, CancellationToken.None);
+
+        Assert.Equal(needsReview, context.Drafts.Get(201)?.FailureCode == "possible_duplicate");
+        Assert.Equal(!needsReview, context.Announcements.Exists(201));
+    }
+
     [Fact]
     public async Task Shadow_CreatesCompleteReviewDraftWithoutSaving()
     {
