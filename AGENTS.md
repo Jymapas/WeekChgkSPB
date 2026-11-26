@@ -359,7 +359,7 @@ Qwen никогда не определяет стоимость. Неодноз
 - если `TELEGRAM_CHANNEL_ID` не задан или невалиден, scheduler канала отключается
 - при старте приложение проверяет, что бот имеет права администратора в канале
 - без `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` приложение фактически не стартует рабочий режим
-- автоматический разбор по умолчанию выключен; `shadow` и `active` требуют API key и HTTPS endpoint Alibaba International
+- при запуске через Docker Compose режим по умолчанию `active`, при прямом запуске без переменной — `off`; `shadow` и `active` требуют API key и HTTPS endpoint Alibaba International
 
 ## 9. Docker и запуск
 

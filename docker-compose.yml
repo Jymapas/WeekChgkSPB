@@ -3,5 +3,7 @@ services:
     image: weekchgk-spb:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      ANNOUNCEMENT_AUTO_PARSE_MODE: ${ANNOUNCEMENT_AUTO_PARSE_MODE:-active}
     volumes:
       - /opt/WeekChgkSPB/data:/data
