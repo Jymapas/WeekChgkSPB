@@ -1,4 +1,4 @@
-﻿namespace WeekChgkSPB.Infrastructure.Bot;
+namespace WeekChgkSPB.Infrastructure.Bot;
 
 internal enum AddStep
 {
@@ -38,8 +38,10 @@ internal class AddAnnouncementState
         Place = string.Empty
     };
     public Announcement? Existing { get; set; }
+    public long? EditChatId { get; set; }
     public string FooterDraftText { get; set; } = string.Empty;
     public long FooterEditId { get; set; }
+    public long? SubmittedPendingId { get; set; }
     public long? PendingEditId { get; set; }
     public long? PendingEditChatId { get; set; }
     public int? PendingEditMessageId { get; set; }

@@ -69,7 +69,7 @@ internal sealed class AutomationReviewEditFlow(
                 break;
         }
 
-        drafts.Upsert(draft);
+        drafts.Upsert(draft, context.Message.From?.Id);
         if (state.AutomationReviewChatId.HasValue &&
             state.AutomationReviewMessageId.HasValue)
         {

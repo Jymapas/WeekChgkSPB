@@ -62,14 +62,16 @@ public class PostsRepository
     {
         var rows = new List<(long Id, string Normalized)>();
         using var select = connection.CreateCommand();
-        select.CommandText = @"SELECT id, link FROM posts WHERE normalizedLink IS NULL OR normalizedLink = ''";
+        select.CommandText = @"SELECT id, link, normalizedLink FROM posts";
         using (var reader = select.ExecuteReader())
         {
             while (reader.Read())
             {
                 var id = reader.GetInt64(0);
                 var link = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                rows.Add((id, LinkNormalizer.Normalize(link)));
+                var normalized = LinkNormalizer.Normalize(link);
+                if (reader.IsDBNull(2) || reader.GetString(2) != normalized)
+                    rows.Add((id, normalized));
             }
         }
 
@@ -127,6 +129,37 @@ public class PostsRepository
             Link = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
             Description = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
         };
+    }
+
+    public IReadOnlyList<Post> GetVenueChangePosts()
+    {
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, title, link, description
+            FROM posts
+            ORDER BY id
+            """;
+        using var reader = command.ExecuteReader();
+        var posts = new List<Post>();
+        while (reader.Read())
+        {
+            var post = new Post
+            {
+                Id = reader.GetInt64(0),
+                Title = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                Link = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                Description = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
+            };
+            if (AnnouncementPreParser.IsVenueChange(post))
+            {
+                posts.Add(post);
+            }
+        }
+
+        return posts;
     }
 
     public bool TryGetIdByLink(string link, out long id)
@@ -236,6 +269,9 @@ public class PostsRepository
             cmd.Parameters.AddWithValue(paramName, keepIds[i]);
         }
 
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='announcement_review_drafts'";
+        var pendingFilter = cmd.ExecuteScalar() is null ? string.Empty :
+            "AND NOT EXISTS (SELECT 1 FROM announcement_review_drafts WHERE post_id=posts.id AND status='pending')";
         var keepClause = string.Join(", ", placeholders);
         cmd.CommandText =
             $@"DELETE FROM posts
@@ -243,6 +279,7 @@ public class PostsRepository
                    SELECT 1 FROM announcements AS a
                    WHERE a.id = posts.id
                )
+               {pendingFilter}
                AND posts.id NOT IN ({keepClause})";
         return cmd.ExecuteNonQuery();
     }

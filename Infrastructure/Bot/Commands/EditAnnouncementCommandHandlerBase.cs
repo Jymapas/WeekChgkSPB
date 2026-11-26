@@ -1,8 +1,4 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Telegram.Bot;
-using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Notifications;
 
 namespace WeekChgkSPB.Infrastructure.Bot.Commands;
@@ -15,10 +11,7 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
     private readonly IChannelPostUpdater _channelPostUpdater;
 
     protected EditAnnouncementCommandHandlerBase(
-        string command,
-        AddStep waitingStep,
-        string usage,
-        IChannelPostUpdater channelPostUpdater)
+        string command, AddStep waitingStep, string usage, IChannelPostUpdater channelPostUpdater)
     {
         _command = command;
         _waitingStep = waitingStep;
@@ -26,91 +19,89 @@ internal abstract class EditAnnouncementCommandHandlerBase : IBotCommandHandler
         _channelPostUpdater = channelPostUpdater;
     }
 
-    public bool CanHandle(BotCommandContext context)
-    {
-        return context.Helper.IsCommand(context.Message.Text, _command);
-    }
+    public bool CanHandle(BotCommandContext context) => context.Helper.IsCommand(context.Message.Text, _command);
 
     public async Task HandleAsync(BotCommandContext context)
     {
         var msg = context.Message;
-        var text = msg.Text;
-        if (text is null)
-        {
-            return;
-        }
-
-        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (msg.Text is null) return;
+        var parts = msg.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length < 2)
         {
             await context.Bot.SendMessage(msg.Chat.Id, Messages.Edit.Usage(_usage), cancellationToken: context.CancellationToken);
             return;
         }
 
-        var link = context.Helper.NormalizePostLink(parts[1]);
-        var existing = context.Announcements.GetByLink(link);
+        var existing = context.Announcements.GetByLink(context.Helper.NormalizePostLink(parts[1]));
         if (existing is null)
         {
             await context.Bot.SendMessage(msg.Chat.Id, Messages.AnnouncementNotFound, cancellationToken: context.CancellationToken);
             return;
         }
-
-        var userId = msg.From?.Id;
-        var isAdmin = context.IsAdminChat;
-        var canEdit = isAdmin || (userId.HasValue && existing.UserId == userId);
-
-        if (!canEdit)
+        if (!context.Announcements.CanManage(existing.Id, context.Actor))
         {
-            await context.Bot.SendMessage(msg.Chat.Id, Messages.Edit.CannotEditOthers, cancellationToken: context.CancellationToken);
+            await DenyAsync(context);
+            return;
+        }
+        if (parts.Length == 2)
+        {
+            await BeginFlowAsync(context, existing);
             return;
         }
 
-        var hasInlineValue = parts.Length > 2;
-        var inlineValue = hasInlineValue ? string.Join(' ', parts.Skip(2)) : null;
-
-        if (hasInlineValue)
+        var value = string.Join(' ', parts.Skip(2));
+        var result = context.Announcements.EditAuthorized(existing.Id, context.Actor, fresh => Apply(fresh, value, context.Helper));
+        if (result.Status == AnnouncementMutationStatus.Denied)
         {
-            var (success, message) = Apply(existing, inlineValue, context.Helper);
-            if (!success)
+            await DenyAsync(context);
+            return;
+        }
+        if (result.Status == AnnouncementMutationStatus.NotFound)
+        {
+            if (msg.From is not null) context.StateStore.Remove(msg.From.Id);
+            await context.Bot.SendMessage(msg.Chat.Id, Messages.AnnouncementNotFound, cancellationToken: context.CancellationToken);
+            return;
+        }
+        if (result.Status == AnnouncementMutationStatus.Invalid)
+        {
+            await context.Bot.SendMessage(msg.Chat.Id, result.Message!, cancellationToken: context.CancellationToken);
+            // Повторно проверяем доступ: привязку могли отозвать во время отправки ответа.
+            var fresh = context.Announcements.Get(existing.Id);
+            if (fresh is null)
             {
-                await context.Bot.SendMessage(msg.Chat.Id, message, cancellationToken: context.CancellationToken);
-
-                if (msg.From is not null)
-                {
-                    var st = context.StateStore.AddOrUpdate(msg.From.Id);
-                    st.Step = _waitingStep;
-                    st.Existing = existing;
-                    await context.Bot.SendMessage(msg.Chat.Id, BuildPrompt(existing, context.Helper), cancellationToken: context.CancellationToken);
-                }
-
-                return;
+                if (msg.From is not null) context.StateStore.Remove(msg.From.Id);
+                await context.Bot.SendMessage(msg.Chat.Id, Messages.AnnouncementNotFound, cancellationToken: context.CancellationToken);
             }
+            else if (context.Announcements.CanManage(fresh.Id, context.Actor))
+                await BeginFlowAsync(context, fresh);
+            else
+                await DenyAsync(context);
+            return;
+        }
 
-            context.Announcements.Update(existing);
+        if (result.Status == AnnouncementMutationStatus.Changed)
             await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
-            await context.Bot.SendMessage(msg.Chat.Id, message, cancellationToken: context.CancellationToken);
+        await context.Bot.SendMessage(msg.Chat.Id, result.Message!, cancellationToken: context.CancellationToken);
+        if (msg.From is not null) context.StateStore.Remove(msg.From.Id);
+    }
 
-            if (msg.From is not null)
-            {
-                context.StateStore.Remove(msg.From.Id);
-            }
-
-            return;
-        }
-
-        if (msg.From is null)
-        {
-            return;
-        }
-
-        var state = context.StateStore.AddOrUpdate(msg.From.Id);
+    private async Task BeginFlowAsync(BotCommandContext context, Announcement existing)
+    {
+        if (context.Message.From is null) return;
+        var state = context.StateStore.AddOrUpdate(context.Message.From.Id);
         state.Step = _waitingStep;
         state.Existing = existing;
+        state.EditChatId = context.Message.Chat.Id;
+        await context.Bot.SendMessage(context.Message.Chat.Id, BuildPrompt(existing, context.Helper), cancellationToken: context.CancellationToken);
+    }
 
-        await context.Bot.SendMessage(msg.Chat.Id, BuildPrompt(existing, context.Helper), cancellationToken: context.CancellationToken);
+    private async Task DenyAsync(BotCommandContext context)
+    {
+        context.AccessDenied = true;
+        if (context.Message.From is not null) context.StateStore.Remove(context.Message.From.Id);
+        await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Edit.CannotEditOthers, cancellationToken: context.CancellationToken);
     }
 
     protected abstract string BuildPrompt(Announcement existing, BotCommandHelper helper);
-
     protected abstract (bool Success, string Message) Apply(Announcement existing, string? inlineValue, BotCommandHelper helper);
 }

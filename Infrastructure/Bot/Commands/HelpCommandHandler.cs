@@ -15,7 +15,7 @@ internal class HelpCommandHandler : IBotCommandHandler
     {
         await context.Bot.SendMessage(
             context.Message.Chat.Id,
-            Messages.Help.Text,
+            Messages.Help.Text + (context.IsAdminChat ? Messages.Help.AdminText : string.Empty),
             cancellationToken: context.CancellationToken);
     }
 }

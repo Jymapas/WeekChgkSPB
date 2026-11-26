@@ -34,6 +34,7 @@ internal abstract class StartAddFlowCommandHandlerBase : IBotCommandHandler
         }
 
         var state = context.StateStore.AddOrUpdate(from.Id);
+        state.SubmittedPendingId = null;
         state.Existing = null;
         state.Step = _targetStep;
         context.Helper.ResetDraft(state);

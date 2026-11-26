@@ -24,6 +24,31 @@ public sealed class AnnouncementReviewHandlerTests : IDisposable
         Path.Combine(Path.GetTempPath(), $"weekchgk-review-handler-{Guid.NewGuid():N}.db");
 
     [Fact]
+    public async Task OldReviewCallback_DoesNotRecreateManuallyDeletedAnnouncement()
+    {
+        var context = CreateContext();
+        var post = CreatePost(42);
+        context.Posts.Insert(post);
+        context.Drafts.Upsert(new AnnouncementReviewDraft
+        {
+            PostId = 42, TournamentName = "Game", Place = "Venue", Cost = 100,
+            DateTimeUtc = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc)
+        });
+        context.Announcements.Insert(new Announcement
+        {
+            Id = 42, TournamentName = "Game", Place = "Venue", Cost = 100,
+            DateTimeUtc = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc)
+        });
+        context.Announcements.DeleteAuthorized(42, new AnnouncementActor(1, true, true));
+
+        Assert.True(await context.Handler.HandleCallbackQuery(CreateCallback("autoreview_add_42"), CancellationToken.None));
+
+        Assert.Null(context.Announcements.Get(42));
+        Assert.Equal(AnnouncementReviewStatuses.Pending, context.Drafts.Get(42)!.Status);
+        context.Channel.Verify(u => u.UpdateLastPostAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task EnsureNotification_HidesAddButtonUntilDraftIsComplete()
     {
         var context = CreateContext();
@@ -122,6 +147,36 @@ public sealed class AnnouncementReviewHandlerTests : IDisposable
         Assert.Equal("Исправленное название", stored!.TournamentName);
         Assert.True(stored.IsComplete);
         Assert.False(context.StateStore.TryGet(1000, out _));
+    }
+
+    [Fact]
+    public async Task Reminders_SurviveCleanupAndSkipOnlyTheSelectedDraft()
+    {
+        var context = CreateContext();
+        var now = DateTime.UtcNow;
+        foreach (var id in new[] { 51, 52, 53 })
+        {
+            context.Posts.Insert(CreatePost(id));
+            context.Drafts.Upsert(new AnnouncementReviewDraft { PostId = id });
+        }
+        context.Announcements.Insert(new Announcement
+        {
+            Id = 53, TournamentName = "Game", Place = "Venue", Cost = 100, DateTimeUtc = now
+        });
+        context.Posts.DeleteWithoutAnnouncementsNotInFeed([54]);
+        await context.Handler.RemindPendingAsync(now, CancellationToken.None);
+        Assert.Empty(context.SentRequests);
+        await context.Handler.RemindPendingAsync(now.AddHours(25), CancellationToken.None);
+        Assert.Equal(2, context.SentRequests.Count);
+        var skip = GetKeyboard(context.SentRequests[0]).InlineKeyboard.SelectMany(row => row)
+            .Single(b => b.CallbackData == "autoreview_skip_51");
+        await context.Handler.HandleCallbackQuery(CreateCallback(skip.CallbackData!), CancellationToken.None);
+        context.SentRequests.Clear();
+        await context.Handler.RemindPendingAsync(now.AddHours(26), CancellationToken.None);
+        Assert.Empty(context.SentRequests);
+        await context.Handler.RemindPendingAsync(now.AddHours(49), CancellationToken.None);
+        Assert.Contains(GetKeyboard(Assert.Single(context.SentRequests)).InlineKeyboard.SelectMany(row => row),
+            b => b.CallbackData == "autoreview_skip_52");
     }
 
     private ReviewContext CreateContext()

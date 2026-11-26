@@ -26,9 +26,14 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
     [
         "студент", "пар", "соло", "трио", "депозит"
     ];
-    private static readonly string[] IgnoredPostMarkers =
+    private static readonly string[] VenueChangeMarkers =
     [
         "перенос площадки",
+        "замена площадки",
+        "смена площадки"
+    ];
+    private static readonly string[] IgnoredPostMarkers =
+    [
         "продолжается регистрация"
     ];
     private static readonly Regex TagsRegex = new(
@@ -59,12 +64,16 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         @"(?<!\d)(?<amount>\d[\d ]{2,5})\s*(?:руб(?:\.|лей|ля)?|₽)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
+    private static readonly Regex StandaloneMoneyRegex = new(
+        @"^\s*\d[\d ]{2,5}\s*(?:руб(?:\.|лей|ля)?|₽)\s*[.!]?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
     private static readonly Regex TeamCapacityRegex = new(
         @"(?:до|из)?\s*(?<capacity>[1-6])(?:\s*[-–—]?\s*(?:ти|х))?\s*(?:чел(?:овек(?:а|у|ом)?|овек)?|игрок(?:а|ов)?)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex QuotedVenueRegex = new(
-        "(?:\\bв|на\\s+площадке\\s*:?|по\\s+адресу\\s*:)\\s*(?:кафе|клубе|клуб|ресторане|ресторан|баре|бар)?\\s*[\"«](?<place>[^\"»\\r\\n]{1,80})[\"»]",
+        "(?:\\bв|(?=ресто-клуб)|на\\s+площадке\\s*:?|по\\s+адресу\\s*:)\\s*(?:ресто-клубе|ресто-клуб|кафе|клубе|клуб|ресторане|ресторан|баре|бар)?\\s*[\"«](?<place>[^\"»\\r\\n]{1,80})[\"»]",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex UnquotedVenueRegex = new(
@@ -84,6 +93,9 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         {
             var title = CleanInline(post.Title);
             var body = CleanBody(post.Description);
+            var isVenueChange = VenueChangeMarkers.Any(marker =>
+                title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
+                body.Contains(marker, StringComparison.OrdinalIgnoreCase));
             if (IgnoredPostMarkers.Any(marker =>
                     title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
                     body.Contains(marker, StringComparison.OrdinalIgnoreCase)))
@@ -95,7 +107,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             }
 
             var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var eventLine = FindEventLine(lines);
+            var eventLine = FindEventLine(lines) ??
+                            (DateRegex.IsMatch(title) && TimeRegex.IsMatch(title) ? title : null);
             if (string.IsNullOrWhiteSpace(eventLine))
             {
                 return AnnouncementPreParseResult.Failed("event_not_found", sourceLength);
@@ -104,10 +117,49 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             var compactEventText = string.Equals(title, eventLine, StringComparison.OrdinalIgnoreCase)
                 ? title
                 : $"{title}\n{eventLine}";
+            if (TryParsePlace(compactEventText) is null)
+            {
+                // Добавляем только фрагмент с площадкой, без соседних цен и контактов.
+                var venue = QuotedVenueRegex.Match(body);
+                if (venue.Success) compactEventText += "\n" + venue.Value;
+            }
 
             var price = ParseCost(lines);
             var hasLocalDateTime = TryParseLocalDateTime(title, eventLine, nowUtc, out var localDateTime);
             var place = TryParsePlace(compactEventText);
+            var gameTimes = lines.Select(FindGameTime).Where(match => match.Success)
+                .Select(TimeOfDay).Distinct().ToList();
+            var titleTime = TimeRegex.Match(title);
+            var registrationLine = lines.Select(line =>
+            {
+                var registration = Regex.Match(line, @"начало регистрации\s*(?:в\s*)?",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+                var registrationTime = registration.Success
+                    ? TimeRegex.Match(line, registration.Index + registration.Length)
+                    : Match.Empty;
+                var gameTime = FindGameTime(line);
+                return (Line: line, Registration: registration, RegistrationTime: registrationTime, GameTime: gameTime);
+            }).FirstOrDefault(item => item.RegistrationTime.Success && item.GameTime.Success &&
+                item.RegistrationTime.Index == item.Registration.Index + item.Registration.Length &&
+                item.GameTime.Index > item.RegistrationTime.Index && titleTime.Success &&
+                TimeOfDay(item.RegistrationTime) == TimeOfDay(titleTime) &&
+                Regex.IsMatch(item.Line[(item.RegistrationTime.Index + item.RegistrationTime.Length)..item.GameTime.Index],
+                    @"^\s*[,;.]\s*начало турнира\s*(?:в\s*)?$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout));
+            var useGameTime = hasLocalDateTime && gameTimes.Count == 1 &&
+                registrationLine.RegistrationTime is not null && registrationLine.RegistrationTime.Success &&
+                TimeOfDay(titleTime) != gameTimes[0];
+            if (useGameTime)
+            {
+                localDateTime = localDateTime.Date.Add(gameTimes[0]);
+                var start = registrationLine.Registration.Index;
+                var end = registrationLine.GameTime.Index + registrationLine.GameTime.Length;
+                if (end > start)
+                    compactEventText += "\n" + registrationLine.Line[start..end];
+            }
+            var timeConflict = gameTimes.Count > 1 ||
+                (titleTime.Success && gameTimes.Count == 1 &&
+                 TimeOfDay(titleTime) != gameTimes[0] && !useGameTime);
 
             if (!price.Success)
             {
@@ -117,8 +169,16 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     compactEventText,
                     price.Cost,
                     price.Evidence,
-                    hasLocalDateTime ? localDateTime : null,
-                    place);
+                    hasLocalDateTime && !timeConflict ? localDateTime : null,
+                    place,
+                    isVenueChange);
+            }
+
+            if (timeConflict)
+            {
+                return AnnouncementPreParseResult.Failed(
+                    "datetime_conflict", sourceLength, compactEventText, price.Cost,
+                    price.Evidence, place: place, isVenueChange: isVenueChange);
             }
 
             if (!hasLocalDateTime)
@@ -129,7 +189,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     compactEventText,
                     price.Cost,
                     price.Evidence,
-                    place: place);
+                    place: place,
+                    isVenueChange: isVenueChange);
             }
 
             if (string.IsNullOrWhiteSpace(place))
@@ -140,7 +201,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                     compactEventText,
                     price.Cost,
                     price.Evidence,
-                    localDateTime);
+                    localDateTime,
+                    isVenueChange: isVenueChange);
             }
 
             return new AnnouncementPreParseResult(
@@ -151,11 +213,33 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                 price.Evidence,
                 localDateTime,
                 place,
-                sourceLength);
+                sourceLength,
+                isVenueChange);
         }
         catch (RegexMatchTimeoutException)
         {
             return AnnouncementPreParseResult.Failed("regex_timeout", sourceLength);
+        }
+    }
+
+    public static bool IsVenueChange(Post post)
+    {
+        if ((post.Title?.Length ?? 0) + (post.Description?.Length ?? 0) > MaxSourceLength)
+        {
+            return false;
+        }
+
+        try
+        {
+            var title = CleanInline(post.Title);
+            var body = CleanBody(post.Description);
+            return VenueChangeMarkers.Any(marker =>
+                title.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
+                body.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
         }
     }
 
@@ -187,6 +271,10 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         decoded = BreakRegex.Replace(decoded, "\n");
         decoded = TagsRegex.Replace(decoded, " ");
         decoded = WhitespaceRegex.Replace(decoded, " ");
+        // RSS иногда объединяет весь анонс в один абзац. Отделяем ценовой
+        // раздел, чтобы распознать тариф и не передавать его в запрос модели.
+        decoded = Regex.Replace(decoded, @"(?<=[.!?])\s+(?=взнос\b|стоимость\b)", "\n",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         return BlankLinesRegex.Replace(decoded, "\n").Trim();
     }
 
@@ -205,14 +293,31 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
             .Where(line => DateRegex.IsMatch(line))
             .OrderByDescending(ScoreEventLine)
             .FirstOrDefault();
-        var gameTime = lines.FirstOrDefault(line =>
-            TimeRegex.IsMatch(line) &&
-            (line.Contains("начало турнира", StringComparison.OrdinalIgnoreCase) ||
-             line.Contains("первый вопрос", StringComparison.OrdinalIgnoreCase)));
+        var gameTime = lines.FirstOrDefault(line => FindGameTime(line).Success);
         return eventDescription is not null && gameTime is not null
             ? $"{eventDescription} {gameTime}"
             : null;
     }
+
+    internal static Match FindGameTime(string line)
+    {
+        var marker = Regex.Match(line, @"начало турнира|первый вопрос|первый тур",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        if (!marker.Success)
+        {
+            var schedule = Regex.IsMatch(line,
+                @"^\s*\d{1,2}[:.-]\d{2}\s*[-–—]\s*(?:\d{1,2}[:.-]\d{2}\s*[-–—]?\s*)?КВРМ\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+            return schedule ? TimeRegex.Match(line) : Match.Empty;
+        }
+        // В тексте время следует за маркером, в расписании интервал стоит перед ним.
+        var after = TimeRegex.Match(line, marker.Index + marker.Length);
+        return after.Success ? after : TimeRegex.Match(line);
+    }
+
+    private static TimeSpan TimeOfDay(Match match) => new(
+        int.Parse(match.Groups["hour"].Value, CultureInfo.InvariantCulture),
+        int.Parse(match.Groups["minute"].Value, CultureInfo.InvariantCulture), 0);
 
     private static int ScoreEventLine(string line)
     {
@@ -254,9 +359,23 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
                 break;
             }
 
+            // Обычное участие и зачёт отбора — конкурирующие основные тарифы.
+            if (Regex.IsMatch(line, @"(?:зач[её]т|выводящий).*(?<!\d)\d{3,5}(?!\d)|\d{3,5}.*(?:зач[её]т|обычное участие)",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout) &&
+                Regex.Matches(line, @"(?<!\d)\d{3,5}(?!\d)", RegexOptions.CultureInvariant, RegexTimeout).Count > 1)
+            {
+                return (false, "cost_ambiguous", null, line);
+            }
+
             var money = MoneyRegex.Match(line);
-            if (!money.Success ||
-                !TryGetTeamCapacity(line, money.Index, i == start, out var capacity))
+            if (!money.Success)
+            {
+                continue;
+            }
+
+            var hasTeamPrice = TryGetTeamCapacity(line, money.Index, i == start, out var capacity);
+            var isStandalonePrimaryPrice = i == start + 1 && StandaloneMoneyRegex.IsMatch(line);
+            if (!hasTeamPrice && !isStandalonePrimaryPrice)
             {
                 continue;
             }
@@ -294,12 +413,6 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
     {
         var lower = line.ToLowerInvariant();
         var hasTeam = lower.Contains("команд", StringComparison.Ordinal);
-        if (ExcludedTariffMarkers.Any(marker => lower.Contains(marker, StringComparison.Ordinal)))
-        {
-            capacity = null;
-            return false;
-        }
-
         var prefix = lower[..Math.Min(moneyIndex, lower.Length)];
         if (DiscountMarkers.Any(marker => prefix.Contains(marker, StringComparison.Ordinal)))
         {
@@ -308,6 +421,16 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         }
 
         var capacityMatch = TeamCapacityRegex.Match(lower);
+        var tariffDescriptorEnd = capacityMatch.Success
+            ? capacityMatch.Index + capacityMatch.Length
+            : moneyIndex;
+        if (ExcludedTariffMarkers.Any(marker =>
+                lower[..Math.Min(tariffDescriptorEnd, lower.Length)].Contains(marker, StringComparison.Ordinal)))
+        {
+            capacity = null;
+            return false;
+        }
+
         if (capacityMatch.Success &&
             int.TryParse(capacityMatch.Groups["capacity"].Value, out var parsedCapacity))
         {
@@ -329,8 +452,8 @@ internal sealed class AnnouncementPreParser(TimeZoneInfo moscowTimeZone)
         var timeMatch = TimeRegex.Match(title);
         if (!timeMatch.Success)
         {
-            var matches = TimeRegex.Matches(eventLine);
-            timeMatch = matches.Count > 0 ? matches[matches.Count - 1] : Match.Empty;
+            timeMatch = FindGameTime(eventLine);
+            if (!timeMatch.Success) timeMatch = TimeRegex.Match(eventLine);
         }
 
         if (!dateMatch.Success || !timeMatch.Success)

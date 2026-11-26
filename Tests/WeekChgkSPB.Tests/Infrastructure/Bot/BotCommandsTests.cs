@@ -42,6 +42,7 @@ public class BotCommandsTests
     public void AsBotCommands_MapsCommandNamesAndDescriptions()
     {
         var commands = BotCommands.AsAdminBotCommands();
+        Assert.Contains(commands, c => c.Command == "check_lj");
         var makePost = Assert.Single(commands, c => c.Command == BotCommands.MakePost.TrimStart('/'));
 
         Assert.Equal("Создать пост", makePost.Description);
@@ -59,6 +60,7 @@ public class BotCommandsTests
         Assert.Contains(commands, c => c.Command == BotCommands.Add.TrimStart('/'));
         Assert.Contains(commands, c => c.Command == BotCommands.Delete.TrimStart('/'));
         Assert.DoesNotContain(commands, c => c.Command == BotCommands.MakePost.TrimStart('/'));
+        Assert.DoesNotContain(commands, c => c.Command == "check_lj");
         Assert.DoesNotContain(commands, c => c.Command == BotCommands.FooterAdd.TrimStart('/'));
         Assert.Equal(commands.Count, commands.Select(c => c.Command).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }

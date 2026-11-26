@@ -23,6 +23,10 @@ public static class BotCommands
     public const string FooterList = "/footer_list";
     public const string FooterDel = "/footer_del";
     public const string FooterEdit = "/footer_edit";
+    public const string CheckLJ = "/check_lj";
+    public const string LjBind = "/lj_bind";
+    public const string LjUnbind = "/lj_unbind";
+    public const string LjList = "/lj_list";
 
     public static readonly string[] AdminOnly =
     [
@@ -33,6 +37,10 @@ public static class BotCommands
         FooterList,
         FooterDel,
         FooterEdit,
+        CheckLJ,
+        LjBind,
+        LjUnbind,
+        LjList,
     ];
 
     public static readonly string[] User =
@@ -74,6 +82,10 @@ public static class BotCommands
         [FooterList] = "Список футеров",
         [FooterDel] = "Удалить футер",
         [FooterEdit] = "Редактировать футер",
+        [CheckLJ] = "Проверить новые посты ЖЖ",
+        [LjBind] = "Связать Telegram-пользователя с автором ЖЖ",
+        [LjUnbind] = "Удалить связь с автором ЖЖ",
+        [LjList] = "Показать связи с авторами ЖЖ",
     };
 
     public static IReadOnlyList<BotCommand> AsAdminBotCommands() => ToBotCommands(All);
@@ -81,6 +93,14 @@ public static class BotCommands
     public static IReadOnlyList<BotCommand> AsUserBotCommands() => ToBotCommands(User);
 
     public static IReadOnlyList<BotCommand> AsBotCommands() => AsAdminBotCommands();
+
+    internal static bool IsAdminOnlyStep(AddStep step) => step is
+        AddStep.FooterWaitingText or AddStep.FooterWaitingExpiry or
+        AddStep.FooterEditWaitingText or AddStep.FooterEditWaitingExpiry or
+        AddStep.PendingEditWaitingName or AddStep.PendingEditWaitingPlace or
+        AddStep.PendingEditWaitingDateTime or AddStep.PendingEditWaitingCost or
+        AddStep.AutomationReviewWaitingName or AddStep.AutomationReviewWaitingPlace or
+        AddStep.AutomationReviewWaitingDateTime or AddStep.AutomationReviewWaitingCost;
 
     private static IReadOnlyList<BotCommand> ToBotCommands(IEnumerable<string> source) =>
         source

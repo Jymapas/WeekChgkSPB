@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using Microsoft.Data.Sqlite;
 using WeekChgkSPB.Tests.Infrastructure.Bot.Flows;
 
 namespace WeekChgkSPB.Tests.Infrastructure.Persistence;
@@ -10,6 +12,45 @@ public class AnnouncementsRepositoryTests : IClassFixture<SqliteFixture>
     public AnnouncementsRepositoryTests(SqliteFixture fixture)
     {
         _fixture = fixture;
+    }
+
+    [Fact]
+    public void ManualUpdate_PreservesEachChangedFieldWithActor()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"announcement-edits-{Guid.NewGuid():N}.db");
+        try
+        {
+            var repository = new AnnouncementsRepository(path);
+            var announcement = new Announcement
+            {
+                Id = 42, TournamentName = "Кубок", Place = "Соус", Cost = 1800,
+                DateTimeUtc = new DateTime(2026, 10, 27, 16, 30, 0, DateTimeKind.Utc)
+            };
+            repository.Insert(announcement);
+            announcement.Cost = 0;
+            announcement.CostLabel = "1800/2100 ₽";
+            repository.Update(announcement, 123);
+            repository.Update(announcement, 123);
+            using var connection = new SqliteConnection($"Data Source={path}");
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT field, old_value, new_value, edited_by_user_id FROM announcement_edits ORDER BY id";
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal("cost", reader.GetString(0));
+            Assert.Equal("1800", reader.GetString(1));
+            Assert.Equal("0", reader.GetString(2));
+            Assert.Equal(123, reader.GetInt64(3));
+            Assert.True(reader.Read());
+            Assert.Equal("cost_text", reader.GetString(0));
+            Assert.True(reader.IsDBNull(1));
+            Assert.Equal("1800/2100 ₽", reader.GetString(2));
+            Assert.False(reader.Read());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

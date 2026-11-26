@@ -8,7 +8,8 @@ internal sealed record AnnouncementPreParseResult(
     string? CostEvidence,
     DateTime? LocalDateTime,
     string? Place,
-    int SourceLength)
+    int SourceLength,
+    bool IsVenueChange = false)
 {
     public bool CanCallApi =>
         Cost.HasValue &&
@@ -21,6 +22,7 @@ internal sealed record AnnouncementPreParseResult(
         int? cost = null,
         string? costEvidence = null,
         DateTime? localDateTime = null,
-        string? place = null) =>
-        new(false, failureCode, compactEventText, cost, costEvidence, localDateTime, place, sourceLength);
+        string? place = null,
+        bool isVenueChange = false) =>
+        new(false, failureCode, compactEventText, cost, costEvidence, localDateTime, place, sourceLength, isVenueChange);
 }

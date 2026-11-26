@@ -13,10 +13,39 @@ internal sealed class AnnouncementReviewDraftRepository
         EnsureCreated();
     }
 
-    public void Upsert(AnnouncementReviewDraft draft)
+    public void Upsert(AnnouncementReviewDraft draft, long? editedByUserId = null)
     {
         using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        if (editedByUserId.HasValue)
+        {
+            foreach (var (field, value) in new (string Field, object? Value)[]
+                     {
+                         ("tournament_name", NullIfWhiteSpace(draft.TournamentName)),
+                         ("place", NullIfWhiteSpace(draft.Place)),
+                         ("datetime_utc", draft.DateTimeUtc?.ToUniversalTime().ToString("O")),
+                         ("cost", draft.Cost)
+                     })
+            {
+                using var audit = connection.CreateCommand();
+                audit.Transaction = transaction;
+                audit.CommandText = $"""
+                    INSERT INTO announcement_review_edits
+                        (post_id, field, old_value, new_value, edited_by_user_id, edited_at_utc)
+                    SELECT post_id, @field, CAST({field} AS TEXT), CAST(@value AS TEXT), @userId, @now
+                    FROM announcement_review_drafts
+                    WHERE post_id=@postId AND {field} IS NOT @value
+                    """;
+                Add(audit, "@field", field);
+                Add(audit, "@value", value);
+                Add(audit, "@userId", editedByUserId.Value);
+                Add(audit, "@postId", draft.PostId);
+                Add(audit, "@now", DateTime.UtcNow.ToString("O"));
+                audit.ExecuteNonQuery();
+            }
+        }
         using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             INSERT INTO announcement_review_drafts
@@ -51,6 +80,7 @@ internal sealed class AnnouncementReviewDraftRepository
         Add(command, "@reviewMessageId", draft.ReviewMessageId);
         Add(command, "@now", DateTime.UtcNow.ToString("O"));
         command.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     public AnnouncementReviewDraft? Get(long postId)
@@ -88,6 +118,37 @@ internal sealed class AnnouncementReviewDraftRepository
             SourceMessageId = reader.IsDBNull(7) ? null : reader.GetInt32(7),
             ReviewMessageId = reader.IsDBNull(8) ? null : reader.GetInt32(8)
         };
+    }
+
+    public List<long> GetDueForReminder(DateTime nowUtc)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT d.post_id FROM announcement_review_drafts d
+            JOIN posts p ON p.id = d.post_id
+            WHERE d.status = 'pending' AND d.updated_at_utc <= @cutoff
+            ORDER BY d.updated_at_utc, d.post_id
+            """;
+        command.Parameters.AddWithValue("@cutoff", nowUtc.AddDays(-1).ToString("O"));
+        using var reader = command.ExecuteReader();
+        var ids = new List<long>();
+        while (reader.Read()) ids.Add(reader.GetInt64(0));
+        return ids;
+    }
+
+    public void MarkReminderSent(long postId, DateTime nowUtc, int messageId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE announcement_review_drafts SET updated_at_utc=@now, review_message_id=@message
+            WHERE post_id=@id AND status='pending'
+            """;
+        command.Parameters.AddWithValue("@id", postId);
+        command.Parameters.AddWithValue("@message", messageId);
+        command.Parameters.AddWithValue("@now", nowUtc.ToString("O"));
+        command.ExecuteNonQuery();
     }
 
     public void SetSourceMessageId(long postId, int messageId) =>
@@ -144,6 +205,15 @@ internal sealed class AnnouncementReviewDraftRepository
                 review_message_id INTEGER,
                 created_at_utc TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS announcement_review_edits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                field TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                edited_by_user_id INTEGER NOT NULL,
+                edited_at_utc TEXT NOT NULL
             )
             """;
         command.ExecuteNonQuery();

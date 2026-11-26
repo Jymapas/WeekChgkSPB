@@ -1,5 +1,7 @@
 # WeekChgkSPB
 
+Разрешённые пользователи могут редактировать и удалять анонсы своих ЖЖ-аккаунтов после административной привязки. Управление связями, однократная начальная настройка и восстановление авторов старых записей описаны в [инструкции](docs/operations/lj-ownership.md).
+
 ## .env example
 ```yml
 TELEGRAM_BOT_TOKEN=123456789:AAaa1122BBbb
@@ -11,8 +13,8 @@ TELEGRAM_CHANNEL_POST_TIME=12:00
 TELEGRAM_CHANNEL_TRIGGER_WINDOW_MINUTES=180
 DB_PATH=/data/posts.db
 
-# Qwen auto parsing: off | shadow | active (default: off)
-ANNOUNCEMENT_AUTO_PARSE_MODE=off
+# Qwen auto parsing: off | shadow | active (Compose default: active)
+ANNOUNCEMENT_AUTO_PARSE_MODE=active
 QWEN_API_KEY=sk-...
 QWEN_API_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1/
 QWEN_MODEL=qwen3.5-flash-2026-02-23
@@ -29,7 +31,7 @@ QWEN_TIMEOUT_SECONDS=30
 - `QWEN_MODEL` — defaults to the pinned `qwen3.5-flash-2026-02-23` snapshot.
 - `QWEN_TIMEOUT_SECONDS` — one-request timeout from 1 to 30 seconds; there are no retries.
 
-The bot extracts the standard full-team price locally. Price blocks, contacts, registration instructions and other RSS body sections are not sent to Qwen. Any ambiguous price, API/JSON error, or validation mismatch falls back to the manual flow. Start production evaluation in `shadow`; switch to `active` only after the agreed offline/shadow gates are met.
+The bot extracts the standard full-team price locally. Price blocks, contacts, registration instructions and other RSS body sections are not sent to Qwen. Any ambiguous price, API/JSON error, or validation mismatch falls back to the manual flow. Compose defaults to `active`. An explicit mode in the deployment .env overrides this default.
 
 Posts containing `Перенос площадки` or `Продолжается регистрация` in the title or body are treated as updates: they are never sent to Qwen and use the manual fallback.
 

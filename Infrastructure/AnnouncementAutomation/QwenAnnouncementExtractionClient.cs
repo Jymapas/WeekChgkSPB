@@ -28,7 +28,11 @@ internal sealed class QwenAnnouncementExtractionClient(
             "localDateTime": "exact substring from the event text"
           }
         }
-        Every value must be a non-empty JSON string. Evidence values must be exact substrings of the supplied event.
+        Every value must be a non-empty JSON string. Evidence values must be exact substrings of the supplied event. Never insert ellipses, paraphrase, or join separated fragments.
+        Use the explicit start of the tournament rather than registration time when both are given.
+        If the date and time occur together, quote that exact span. If they occur on separate lines, quote the exact phrase giving the game start (for example, «Первый вопрос будет задан в 19:30»). Read the date from the same event.
+        Normalize Sims To Be: Vol. N to Sims To Be-N; remove trailing years and (Финал ЛВ).
+        Preserve subtitles, internal years, and the stage number in the source. Normalize Второй этап отбора на Чемпионат России среди студентов по интеллектуальным играм to Отбор на СтудЧР-2.
         """;
 
     public async Task<AnnouncementExtractionResult> ExtractAsync(

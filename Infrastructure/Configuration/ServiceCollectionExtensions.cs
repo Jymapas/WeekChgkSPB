@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
 using WeekChgkSPB;
 using WeekChgkSPB.Infrastructure.Bot;
+using WeekChgkSPB.Infrastructure.Bot.Auditing;
 using WeekChgkSPB.Infrastructure.Bot.Commands;
 using WeekChgkSPB.Infrastructure.Bot.Flows;
 using WeekChgkSPB.Infrastructure.Notifications;
@@ -17,13 +18,28 @@ internal static class ServiceCollectionExtensions
         AppSettings settings,
         string rssUrl)
     {
+        services.AddSingleton(new ManualActionsRepository(settings.DbPath));
+        services.AddSingleton(sp => new BotManualActionAuditor(
+            sp.GetRequiredService<ManualActionsRepository>(),
+            sp.GetRequiredService<BotConversationState>(),
+            sp.GetRequiredService<AnnouncementsRepository>(),
+            sp.GetRequiredService<PostsRepository>(),
+            sp.GetRequiredService<FootersRepository>(),
+            sp.GetRequiredService<UserManagementRepository>(),
+            sp.GetRequiredService<AnnouncementReviewDraftRepository>(),
+            sp.GetRequiredService<BotCommandHelper>(),
+            settings.ChatId,
+            sp.GetRequiredService<LiveJournalIdentityRepository>()));
         services.AddSingleton(new PostsRepository(settings.DbPath));
+        services.AddSingleton(new LiveJournalIdentityRepository(settings.DbPath));
         services.AddSingleton(new FootersRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementsRepository(settings.DbPath));
         services.AddSingleton(new ChannelPostsRepository(settings.DbPath));
         services.AddSingleton(new UserManagementRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementParseAttemptsRepository(settings.DbPath));
         services.AddSingleton(new AnnouncementReviewDraftRepository(settings.DbPath));
+        services.AddSingleton<RssPoller>();
+        services.AddSingleton<IBotCommandHandler, CheckLiveJournalCommandHandler>();
         services.AddSingleton(new RssFetcher(rssUrl));
         services.AddSingleton(settings.AutomationOptions);
         services.AddSingleton(PostFormatter.Moscow);
@@ -63,6 +79,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IBotCommandHandler>(sp => new MakePostCommandHandler(BotCommands.MakePost, false));
         services.AddSingleton<IBotCommandHandler>(sp => new ForcePostCommandHandler(settings.ChannelId));
         services.AddSingleton<IBotCommandHandler, HelpCommandHandler>();
+        services.AddSingleton<IBotCommandHandler, LiveJournalCommandsHandler>();
         services.AddSingleton<IBotCommandHandler, CancelCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddLinesCommandHandler>();
         services.AddSingleton<IBotCommandHandler, AddCommandHandler>();
@@ -125,7 +142,8 @@ internal static class ServiceCollectionExtensions
             sp.GetServices<IBotCommandHandler>(),
             sp.GetServices<IConversationFlowHandler>(),
             sp.GetRequiredService<AnnouncementReviewHandler>(),
-            sp.GetRequiredService<ForcePostHandler>()));
+            sp.GetRequiredService<ForcePostHandler>(),
+            sp.GetRequiredService<BotManualActionAuditor>()));
 
         if (settings.HasScheduler)
         {

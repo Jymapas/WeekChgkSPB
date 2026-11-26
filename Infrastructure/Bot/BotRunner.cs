@@ -6,12 +6,14 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using WeekChgkSPB.Infrastructure.Notifications;
+using WeekChgkSPB.Infrastructure.Bot.Auditing;
 using WeekChgkSPB.Infrastructure.AnnouncementAutomation;
 
 namespace WeekChgkSPB.Infrastructure.Bot;
 
 internal class BotRunner
 {
+    private readonly BotManualActionAuditor? _manualActionAuditor;
     private readonly long _allowedChatId;
     private readonly ITelegramBotClient _bot;
     private readonly PostsRepository _posts;
@@ -39,8 +41,10 @@ internal class BotRunner
         IEnumerable<IBotCommandHandler> handlers,
         IEnumerable<IConversationFlowHandler> flows,
         AnnouncementReviewHandler? announcementReviewHandler = null,
-        ForcePostHandler? forcePostHandler = null)
+        ForcePostHandler? forcePostHandler = null,
+        BotManualActionAuditor? manualActionAuditor = null)
     {
+        _manualActionAuditor = manualActionAuditor;
         _bot = bot;
         _allowedChatId = allowedChatId;
         _posts = posts;
@@ -70,9 +74,39 @@ internal class BotRunner
 
     internal async Task HandleUpdate(ITelegramBotClient bot, Update update, CancellationToken ct)
     {
+        var action = _manualActionAuditor?.Begin(update);
+        Exception? failure = null;
+        try
+        {
+            await HandleUpdateCoreAsync(bot, update, action, ct);
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+            throw;
+        }
+        finally
+        {
+            if (action is not null)
+            {
+                try
+                {
+                    _manualActionAuditor!.Complete(action, failure);
+                }
+                catch when (failure is not null)
+                {
+                    // Сохраняем исходное исключение; незавершённая запись остаётся в журнале.
+                }
+            }
+        }
+    }
+
+    /// <summary>Передаёт обновление существующим обработчикам команд, ввода и кнопок.</summary>
+    private async Task HandleUpdateCoreAsync(ITelegramBotClient bot, Update update, ManualAction? action, CancellationToken ct)
+    {
         if (update.CallbackQuery is not null)
         {
-            await HandleCallbackQuery(bot, update.CallbackQuery, ct);
+            await HandleCallbackQuery(bot, update.CallbackQuery, action, ct);
             return;
         }
 
@@ -98,15 +132,15 @@ internal class BotRunner
         var isAdminChat = message.Chat.Id == _allowedChatId;
         var context = new BotCommandContext(_bot, message, ct, _announcements, _posts, _footers, _stateStore, _helper, isAdminChat, _userManagement, _moderationHandler);
 
-        if (await HandleCommandAsync(context))
+        if (await HandleCommandAsync(context, action))
         {
             return;
         }
 
-        await HandleFlowAsync(context);
+        await HandleFlowAsync(context, action);
     }
 
-    private async Task HandleCallbackQuery(ITelegramBotClient bot, Telegram.Bot.Types.CallbackQuery callbackQuery, CancellationToken ct)
+    private async Task HandleCallbackQuery(ITelegramBotClient bot, Telegram.Bot.Types.CallbackQuery callbackQuery, ManualAction? action, CancellationToken ct)
     {
         if (callbackQuery.Message is null || callbackQuery.Data is null)
         {
@@ -119,32 +153,51 @@ internal class BotRunner
             return;
         }
 
-        if (await _moderationHandler.HandleCallbackQuery(callbackQuery, ct))
+        if (_userManagement.IsBanned(callbackQuery.From.Id))
         {
+            await bot.AnswerCallbackQuery(callbackQuery.Id, Messages.Bot.AccessDenied, cancellationToken: ct);
             return;
         }
 
+        if (action is not null) action.Handler = nameof(ModerationHandler);
+        if (await _moderationHandler.HandleCallbackQuery(callbackQuery, ct))
+        {
+            if (action is not null) action.Outcome = "handled";
+            return;
+        }
+
+        if (action is not null) action.Handler = nameof(AnnouncementReviewHandler);
         if (_announcementReviewHandler is not null &&
             await _announcementReviewHandler.HandleCallbackQuery(callbackQuery, ct))
         {
+            if (action is not null) action.Outcome = "handled";
             return;
         }
 
+        if (action is not null) action.Handler = nameof(ForcePostHandler);
         if (_forcePostHandler is not null &&
             await _forcePostHandler.HandleCallbackQuery(callbackQuery, ct))
         {
+            if (action is not null) action.Outcome = "handled";
             return;
         }
 
+        if (action is not null) action.Handler = null;
         await bot.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
     }
 
-    private async Task<bool> HandleCommandAsync(BotCommandContext context)
+    private async Task<bool> HandleCommandAsync(BotCommandContext context, ManualAction? action)
     {
         var text = context.Message.Text;
         if (text is null || !text.StartsWith('/'))
         {
             return false;
+        }
+
+        if (!context.IsAdminChat && BotCommands.AdminOnly.Any(command => _helper.IsCommand(text, command)))
+        {
+            await DenyAdminActionAsync(context, action);
+            return true;
         }
 
         foreach (var handler in _handlers)
@@ -154,14 +207,26 @@ internal class BotRunner
                 continue;
             }
 
-            await handler.HandleAsync(context);
+            if (action is not null) action.Handler = handler.GetType().Name;
+            try
+            {
+                await handler.HandleAsync(context);
+            }
+            finally
+            {
+                if (action is not null) action.Denied |= context.AccessDenied;
+            }
+            if (action is not null)
+            {
+                action.Outcome = context.AccessDenied ? "denied" : "handled";
+            }
             return true;
         }
 
         return false;
     }
 
-    private async Task HandleFlowAsync(BotCommandContext context)
+    private async Task HandleFlowAsync(BotCommandContext context, ManualAction? action)
     {
         var from = context.Message.From;
         if (from is null)
@@ -174,6 +239,12 @@ internal class BotRunner
             return;
         }
 
+        if (!context.IsAdminChat && BotCommands.IsAdminOnlyStep(state.Step))
+        {
+            await DenyAdminActionAsync(context, action);
+            return;
+        }
+
         if (!_flowsByStep.TryGetValue(state.Step, out var flowsForStep))
         {
             return;
@@ -181,8 +252,22 @@ internal class BotRunner
 
         foreach (var flow in flowsForStep)
         {
-            if (await flow.HandleAsync(context, state))
+            if (action is not null) action.Handler = flow.GetType().Name;
+            bool handled;
+            try
             {
+                handled = await flow.HandleAsync(context, state);
+            }
+            finally
+            {
+                if (action is not null) action.Denied |= context.AccessDenied;
+            }
+            if (handled)
+            {
+                if (action is not null)
+                {
+                    action.Outcome = context.AccessDenied ? "denied" : "handled";
+                }
                 return;
             }
         }
@@ -230,6 +315,15 @@ internal class BotRunner
         }
 
         return result;
+    }
+
+    private async Task DenyAdminActionAsync(BotCommandContext context, ManualAction? action)
+    {
+        context.AccessDenied = true;
+        if (action is not null) action.Denied = true;
+        if (context.Message.From is { } from) _stateStore.Remove(from.Id);
+        await _bot.SendMessage(context.Message.Chat.Id, Messages.Bot.AccessDenied,
+            cancellationToken: context.CancellationToken);
     }
 
     private static void AddIfHandles(

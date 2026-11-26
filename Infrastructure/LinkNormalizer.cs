@@ -35,6 +35,9 @@ public static class LinkNormalizer
             return trimmed;
         }
 
+        if (LiveJournalIdentity.TryNormalizeLink(trimmed, out var liveJournalLink, out _))
+            return liveJournalLink;
+
         var builder = new UriBuilder(uri)
         {
             Scheme = uri.Scheme.ToLowerInvariant(),

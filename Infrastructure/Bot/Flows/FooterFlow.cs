@@ -64,6 +64,7 @@ internal class FooterFlow : IConversationFlowHandler
         }
 
         var footerId = context.Footers.Insert(state.FooterDraftText, expiresAtUtc);
+        state.FooterEditId = footerId;
 
         DateTime? displayDate = expiresAtUtc.HasValue
             ? TimeZoneInfo.ConvertTimeFromUtc(expiresAtUtc.Value, PostFormatter.Moscow)

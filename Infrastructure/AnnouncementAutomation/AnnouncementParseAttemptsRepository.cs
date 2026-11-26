@@ -59,7 +59,7 @@ internal sealed class AnnouncementParseAttemptsRepository
         command.CommandText =
             """
             UPDATE announcement_parse_attempts
-            SET outcome=@outcome, failure_code=@failureCode
+            SET outcome=@outcome, failure_code=COALESCE(@failureCode, failure_code)
             WHERE post_id=@postId
             """;
         command.Parameters.AddWithValue("@outcome", outcome);
@@ -75,6 +75,26 @@ internal sealed class AnnouncementParseAttemptsRepository
         command.CommandText = "SELECT EXISTS(SELECT 1 FROM announcement_parse_attempts WHERE post_id=@postId)";
         command.Parameters.AddWithValue("@postId", postId);
         return (long)command.ExecuteScalar()! == 1;
+    }
+
+    public bool HasOutcomePrefix(long postId, string prefix)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT outcome FROM announcement_parse_attempts WHERE post_id=@postId";
+        command.Parameters.AddWithValue("@postId", postId);
+        return command.ExecuteScalar() is string outcome &&
+               outcome.StartsWith(prefix, StringComparison.Ordinal);
+    }
+
+    public bool WasNotified(long postId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT notified_at_utc IS NOT NULL FROM announcement_parse_attempts WHERE post_id=@postId";
+        command.Parameters.AddWithValue("@postId", postId);
+        return command.ExecuteScalar() is long value && value == 1;
     }
 
     private void EnsureCreated()

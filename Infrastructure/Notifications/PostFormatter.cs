@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Net;
 using System.Text;
 
 namespace WeekChgkSPB.Infrastructure.Notifications;
@@ -72,8 +73,14 @@ public static class PostFormatter
             foreach (var x in g)
             {
                 var time = x.local.ToString("HH:mm", Ru);
-                sb.Append($"""<a href="{x.r.Link}">{x.r.TournamentName} - {x.r.Place} ({time}) {FormatCost(x.r.Cost, x.r.CostLabel)}</a>""")
-                    .Append('\n');
+                var text = WebUtility.HtmlEncode(
+                    $"{x.r.TournamentName} - {x.r.Place} ({time}) {FormatCost(x.r.Cost, x.r.CostLabel)}");
+                if (Uri.TryCreate(x.r.Link, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+                    sb.Append($"""<a href="{WebUtility.HtmlEncode(x.r.Link)}">{text}</a>""");
+                else
+                    sb.Append(text);
+                sb.Append('\n');
             }
             sb.AppendLine();
         }

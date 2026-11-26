@@ -32,7 +32,32 @@ internal static class Messages
             "/edit_place - изменить место\n" +
             "/edit_datetime - изменить дату и время\n" +
             "/edit_cost - изменить стоимость\n" +
-            "/delete - удалить свой анонс";
+            "/delete - удалить свой анонс\n\n" +
+            "Свои анонсы можно редактировать и удалять по ссылке. Для анонсов из ЖЖ нужна привязка автора, настроенная администратором, и доступ в белом списке.";
+        internal const string AdminText =
+            "\n/check_lj - проверить новые посты ЖЖ сейчас\n" +
+            "\nПривязки авторов ЖЖ (только админ-чат):\n" +
+            "/lj_bind <telegram_id> <lj_login> [--allow] - привязать автора; --allow также добавляет пользователя в белый список\n" +
+            "/lj_unbind <telegram_id> <lj_login> - удалить привязку\n" +
+            "/lj_list [telegram_id] - показать привязки";
+    }
+
+    internal static class LiveJournal
+    {
+        internal const string BindUsage = "Используй: /lj_bind <telegram_id> <lj_login> [--allow]";
+        internal const string UnbindUsage = "Используй: /lj_unbind <telegram_id> <lj_login>";
+        internal const string ListUsage = "Используй: /lj_list [telegram_id]";
+        internal const string InvalidUserId = "Нужен положительный числовой Telegram ID пользователя";
+        internal const string InvalidLogin = "Нужен логин ЖЖ: латинские буквы, цифры, дефис или подчёркивание, до 64 символов";
+        internal const string UnknownAuthor = "Автор не найден среди сохранённых постов ЖЖ. Проверьте логин или повторите после обновления RSS.";
+        internal const string AmbiguousAuthor = "Логину соответствуют разные ID ЖЖ. Привязка не изменена; проверьте метаданные автора.";
+        internal const string BannedUser = "Пользователь заблокирован. Привязка и белый список не изменены.";
+        internal const string EmptyList = "Привязок к авторам ЖЖ нет";
+        internal const string Unbound = "Привязка удалена";
+        internal const string BindingNotFound = "Такая привязка не найдена";
+        internal static string Bound(long userId, string login, bool allow) =>
+            $"Привязка сохранена: {userId} → {login}" +
+            (allow ? ". Пользователь добавлен в белый список." : ". Белый список не изменён.");
     }
 
     internal static class Cancel
@@ -76,6 +101,7 @@ internal static class Messages
         internal const string DateTimeUpdated = "Дата и время обновлены";
         internal const string CostUpdated = "Стоимость обновлена";
         internal const string NoActiveAnnouncement = "Нет активного анонса для редактирования";
+        internal const string DifferentChat = "Редактирование можно продолжить только в том чате, где оно начато. Начните редактирование заново.";
         internal const string CannotEditOthers = "Вы можете редактировать только свои анонсы";
         internal const string HelpText = "Используй команды: /edit_name, /edit_place, /edit_datetime, /edit_cost";
         internal const string InvalidDateTime = "Неверный формат. Пример ISO: 2025-08-10T19:30 или двумя строками: 22 сентября и 19:30";

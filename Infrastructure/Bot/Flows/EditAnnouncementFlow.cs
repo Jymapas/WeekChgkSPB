@@ -82,15 +82,30 @@ internal class EditAnnouncementFlow : IConversationFlowHandler
             return true;
         }
 
-        var (success, response) = mutator(state.Existing);
-        if (!success)
+        if (state.EditChatId != context.Message.Chat.Id)
         {
-            await context.Bot.SendMessage(context.Message.Chat.Id, response, cancellationToken: context.CancellationToken);
+            context.AccessDenied = true;
+            context.StateStore.Remove(context.Message.From!.Id);
+            await context.Bot.SendMessage(context.Message.Chat.Id, Messages.Edit.DifferentChat, cancellationToken: context.CancellationToken);
             return true;
         }
 
-        context.Announcements.Update(state.Existing);
-        await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
+        var result = context.Announcements.EditAuthorized(state.Existing.Id, context.Actor, mutator);
+        if (result.Status == AnnouncementMutationStatus.Invalid)
+        {
+            await context.Bot.SendMessage(context.Message.Chat.Id, result.Message!, cancellationToken: context.CancellationToken);
+            return true;
+        }
+
+        var response = result.Status switch
+        {
+            AnnouncementMutationStatus.Denied => Messages.Edit.CannotEditOthers,
+            AnnouncementMutationStatus.NotFound => Messages.AnnouncementNotFound,
+            _ => result.Message!
+        };
+        context.AccessDenied = result.Status == AnnouncementMutationStatus.Denied;
+        if (result.Status == AnnouncementMutationStatus.Changed)
+            await _channelPostUpdater.UpdateLastPostAsync(context.CancellationToken);
         await context.Bot.SendMessage(context.Message.Chat.Id, response, cancellationToken: context.CancellationToken);
 
         state.Step = AddStep.Done;

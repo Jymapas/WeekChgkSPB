@@ -15,7 +15,7 @@ internal sealed class TournamentNameNormalizer
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex YearRegex = new(
-        @"(?:\s*[—–-]\s*)?\b20\d{2}\b",
+        @"(?:\s*[—–-]\s*)?\b20\d{2}\s*$",
         RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex NumberSignRegex = new(
@@ -28,6 +28,10 @@ internal sealed class TournamentNameNormalizer
         RegexTimeout);
     private static readonly Regex RomanSuffixRegex = new(
         @"(?<prefix>\b(?:том|Masters|Challenger)\s*)\b(?<roman>[IVXLCDM]+)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        RegexTimeout);
+    private static readonly Regex RussianPartSuffixRegex = new(
+        @"(?:\s*:\s*часть\s+(?<part>первая|вторая|третья|четвёртая|четвертая|пятая|шестая|седьмая|восьмая|девятая|десятая)|\s*:\s*(?<stage>первый|второй|третий|четв[её]рт(?:ый|ой)|пятый|шестой|седьмой|восьмой|девятый|десятый)\s+этап)\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex WhitespaceRegex = new(
@@ -45,10 +49,22 @@ internal sealed class TournamentNameNormalizer
         var value = rawName.Trim().Trim('"', '\'', '«', '»');
         value = Regex.Replace(
             value,
-            @"^\s*Международный\s+турнир\s+",
+            @"^\s*(?:Международный|Строго\s+синхронный)\s+турнир\s+",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
             RegexTimeout);
+
+        value = value.Trim('"', '«', '»').TrimEnd('.');
+        value = Regex.Replace(value, @"\s*\(\s*Финал ЛВ\s*\)", string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value, @"^Sims To Be\s*:\s*Vol\.\s*(\d+)\s*$", "Sims To Be-$1",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value,
+            @"^(?<stage>Первый|Второй|Третий|Четв[её]ртый) этап отбора на (?:Чемпионат России|ЧР) среди студентов(?: по интеллектуальным играм)?$",
+            match => "Отбор на СтудЧР-" + (match.Groups["stage"].Value.ToLowerInvariant() switch
+            {
+                "первый" => "1", "второй" => "2", "третий" => "3", _ => "4"
+            }), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
 
         var b52 = B52Regex.Match(value);
         if (b52.Success)
@@ -59,9 +75,18 @@ internal sealed class TournamentNameNormalizer
         }
 
         value = SyncSuffixRegex.Replace(value, " ");
+        value = Regex.Replace(value,
+            @"^ОВСЧ\s*\.?\s*(?:Сезон\s+20\d{2}\s*/\s*20\d{2}\s*\.\s*)?(?:[—–-]\s*|№\s*)?(?<stage>\d+)\s*(?:этап)?\s*$",
+            "ОВСЧ-${stage}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value, @"\s*\(20\d{2}\)\s*$", string.Empty, RegexOptions.CultureInvariant, RegexTimeout);
+        value = Regex.Replace(value, @"^Плюс\s+(\d+)$", "Плюс-$1", RegexOptions.IgnoreCase, RegexTimeout);
+        value = Regex.Replace(value, @"^(Бесконечные Земли):\s*том\s+([IVXLCDM]+)\s*$",
+            match => $"{match.Groups[1].Value}-{TryParseRoman(match.Groups[2].Value)}",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
         value = YearRegex.Replace(value, string.Empty);
         value = NumberSignRegex.Replace(value, match => $"-{match.Groups["number"].Value}");
         value = RomanSuffixRegex.Replace(value, ReplaceRomanSuffix);
+        value = RussianPartSuffixRegex.Replace(value, ReplaceRussianPartSuffix);
         value = TrailingNumberRegex.Replace(value, match => $"-{match.Groups["number"].Value}");
         value = WhitespaceRegex.Replace(value, " ");
         return value.Trim().Trim('—', '–', '-', ':', ' ');
@@ -76,6 +101,28 @@ internal sealed class TournamentNameNormalizer
         }
 
         return $"{match.Groups["prefix"].Value.Trim()}-{number}";
+    }
+
+    private static string ReplaceRussianPartSuffix(Match match)
+    {
+        var part = match.Groups["part"].Success
+            ? match.Groups["part"].Value.ToLowerInvariant()
+            : match.Groups["stage"].Value.ToLowerInvariant();
+        var number = part switch
+        {
+            "первая" or "первый" => 1,
+            "вторая" or "второй" => 2,
+            "третья" or "третий" => 3,
+            "четвёртая" or "четвертая" or "четвёртый" or "четвертый" or "четвёртой" or "четвертой" => 4,
+            "пятая" or "пятый" => 5,
+            "шестая" or "шестой" => 6,
+            "седьмая" or "седьмой" => 7,
+            "восьмая" or "восьмой" => 8,
+            "девятая" or "девятый" => 9,
+            "десятая" or "десятый" => 10,
+            _ => 0
+        };
+        return number == 0 ? match.Value : $"-{number}";
     }
 
     private static int TryParseRoman(string value)
