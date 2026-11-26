@@ -18,6 +18,7 @@ public sealed class TournamentNameNormalizerTests
 
     [Theory]
     [InlineData("Бесконечные Земли: том LXVII (синхрон)", "Бесконечные Земли-67")]
+    [InlineData("Собачье сердце 2026. Лапландские лайки.", "Собачье сердце 2026. Лапландские лайки")]
     [InlineData("Der Spiegel -1 (2026)", "Der Spiegel-1")]
     [InlineData("Третий этап отбора на ЧР среди студентов", "Отбор на СтудЧР-3")]
     [InlineData("Строго синхронный турнир «FAST / CUP #0»", "FAST / CUP #0")]

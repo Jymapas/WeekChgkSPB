@@ -47,6 +47,7 @@ public sealed class AnnouncementCandidateValidatorTests
 
     [Theory]
     [InlineData("27 октября в клубе «Rossi's». Начало регистрации в 19:15, первый вопрос в 19:30", true)]
+    [InlineData("первый вопрос в 19:30", true)]
     [InlineData("27 октября ... в 19:30", false)]
     [InlineData("Начало регистрации в 19:15", false)]
     public void Validate_RequiresVerbatimEvidenceAndAllowsRegistrationAlongsideGameTime(string evidence, bool expected)

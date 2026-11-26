@@ -15,7 +15,7 @@ internal sealed class TournamentNameNormalizer
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex YearRegex = new(
-        @"(?:\s*[—–-]\s*)?\b20\d{2}\b",
+        @"(?:\s*[—–-]\s*)?\b20\d{2}\s*$",
         RegexOptions.CultureInvariant,
         RegexTimeout);
     private static readonly Regex NumberSignRegex = new(
